@@ -503,6 +503,7 @@ def message_processor():
 
     equities_cnt = 0
     options_cnt = 0
+    # msg_cnt = 0
 
 
     last_message = ""
@@ -520,6 +521,10 @@ def message_processor():
             break
 
         last_message = message_queue.get()
+        # msg_cnt += 1
+        # print(f'\n--------------msg_cnt:{msg_cnt}-----------------')
+        # print(f'last_message:\n{last_message}')
+        # print()
 
 
         try:
