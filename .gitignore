@@ -2,4 +2,8 @@
 
 # User-specific files
 *.env
-*.csv
+
+# Ignore all CSV files recursively
+**/*.csv
+
+
