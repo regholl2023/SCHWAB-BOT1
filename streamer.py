@@ -58,6 +58,10 @@ todays_epoch_time = None
 mqtt_broker_address = "localhost"  # Use "localhost" if the broker is running on the same PC
 mqtt_broker_port = 1883
 
+PUBLISH_MODE_RAW = 0
+PUBLISH_MODE_TOPICS = 1
+publish_mode = PUBLISH_MODE_RAW
+
 def load_env_variables():
     
     # parent_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
@@ -224,73 +228,73 @@ def translate_quote_key_names(json_message):
         if item['service'] == 'LEVELONE_EQUITIES':
             for content in item['content']:
                 if '1' in content:
-                    content['Bid Price'] = content.pop('1')
+                    content['bid'] = content.pop('1')
                 if '2' in content:
-                    content['Ask Price'] = content.pop('2')
+                    content['ask'] = content.pop('2')
                 if '3' in content:
-                    content['Last Price'] = content.pop('3')
+                    content['last'] = content.pop('3')
                 if '4' in content:
-                    content['Bid Size'] = content.pop('4')
+                    content['bid size'] = content.pop('4')
                 if '5' in content:
-                    content['Ask Size'] = content.pop('5')         
+                    content['ask size'] = content.pop('5')         
                 if '6' in content:
-                    content['Ask ID'] = content.pop('6')                    
+                    content['ask ID'] = content.pop('6')                    
                 if '7' in content:
-                    content['Bid ID'] = content.pop('7')  
+                    content['bid ID'] = content.pop('7')  
                 if '8' in content:
-                    content['Total Volume'] = content.pop('8')  
+                    content['total volume'] = content.pop('8')  
 
         elif item['service'] == 'LEVELONE_OPTIONS':
             for content in item['content']:
                 if '1' in content:
-                    content['Description'] = content.pop('1')                
+                    content['description'] = content.pop('1')                
                 if '2' in content:
-                    content['Bid Price'] = content.pop('2')
+                    content['bid'] = content.pop('2')
                 if '3' in content:
-                    content['Ask Price'] = content.pop('3')
+                    content['ask'] = content.pop('3')
                 if '4' in content:
-                    content['Last Price'] = content.pop('4')
+                    content['last'] = content.pop('4')
                 if '5' in content:
-                    content['High Price'] = content.pop('5')
+                    content['high'] = content.pop('5')
                 if '6' in content:
-                    content['Low Price'] = content.pop('6')
+                    content['low'] = content.pop('6')
                 if '7' in content:
-                    content['Close Price'] = content.pop('7')
+                    content['close'] = content.pop('7')
                 if '8' in content:
-                    content['Total Volume'] = content.pop('8')
+                    content['total volume'] = content.pop('8')
                 if '10' in content:
-                    content['Volatility'] = content.pop('10')
+                    content['volatility'] = content.pop('10')
                 if '28' in content:
-                    content['Delta'] = content.pop('28')
+                    content['delta'] = content.pop('28')
                 if '29' in content:
-                    content['Gamma'] = content.pop('29')
+                    content['gamma'] = content.pop('29')
                 if '30' in content:
-                    content['Theta'] = content.pop('30')
+                    content['theta'] = content.pop('30')
                 if '31' in content:
-                    content['Vega'] = content.pop('31')
+                    content['vega'] = content.pop('31')
                 if '32' in content:
-                    content['Rho'] = content.pop('32')
+                    content['rho'] = content.pop('32')
 
 
         elif item['service'] == 'LEVELONE_FUTURES':
             for content in item['content']:
                 for content in item['content']:
                     if '1' in content:
-                        content['Bid Price'] = content.pop('1')
+                        content['bid'] = content.pop('1')
                     if '2' in content:
-                        content['Ask Price'] = content.pop('2')
+                        content['ask'] = content.pop('2')
                     if '3' in content:
-                        content['Last Price'] = content.pop('3')
+                        content['price'] = content.pop('3')
                     if '4' in content:
-                        content['Bid Size'] = content.pop('4')
+                        content['bid size'] = content.pop('4')
                     if '5' in content:
-                        content['Ask Size'] = content.pop('5')         
+                        content['ask size'] = content.pop('5')         
                     if '6' in content:
-                        content['Bid ID'] = content.pop('6')                    
+                        content['bid ID'] = content.pop('6')                    
                     if '7' in content:
-                        content['Ask ID'] = content.pop('7')  
+                        content['ask ID'] = content.pop('7')  
                     if '8' in content:
-                        content['Total Volume'] = content.pop('8')  
+                        content['total volume'] = content.pop('8')  
 
 
 
@@ -334,11 +338,29 @@ def publish_quote(topic, payload):
 
 
 
+def publish_raw_queried_quote(data):
+
+    # pretty_json = json.dumps(data, indent=2)
+    # print(f'in publish_raw_streamed_quote, pretty_json type:{type(pretty_json)}, data:\n{pretty_json}')
+
+    json_str = json.dumps(data)
+    # print(f'in publish_raw_streamed_quote, json_str type:{type(json_str)}, data:\n{json_str}')
+
+
+    topic = "schwab/queried"
+    publish_quote(topic, json_str)
+    pass
 
 
 
+def publish_raw_streamed_quote(data):
 
+    json_str = json.dumps(data)
+    # print(f'in publish_raw_streamed_quote, json_str type:{type(json_str)}, data:\n{json_str}')
 
+    topic = "schwab/stream"
+    publish_quote(topic, json_str)
+    pass
 
 
 def publish_levelone_equities(data):
@@ -537,29 +559,34 @@ def message_processor():
         try:
             json_message = json.loads(last_message)
 
+            # pretty_json = json.dumps(json_message, indent=2)
+            # print(f'raw json_message:\n{pretty_json}')
+
             # quotes are indicated by 'data' in the message
             if 'data' in json_message:
 
                 json_message = translate_quote_key_names(json_message)
-
                 # pretty_json = json.dumps(json_message, indent=2)
                 # print(f'after key translation, pretty json_message:\n<{pretty_json}>\n')
 
-                for item in json_message.get("data", []):
-                    service = item.get("service")
+                publish_raw_streamed_quote(json_message)
+
+
+                # for item in json_message.get("data", []):
+                #     service = item.get("service")
                     
-                    if service == "LEVELONE_EQUITIES":
-                        # print(f'LEVELONE_EQUITIES found, item:\n<{item}>\n\n')
-                        # equities_cnt += 1
-                        # print(f'LEVELONE_EQUITIES found {equities_cnt}')
-                        publish_levelone_equities(item)
+                #     if service == "LEVELONE_EQUITIES":
+                #         # print(f'LEVELONE_EQUITIES found, item:\n<{item}>\n\n')
+                #         # equities_cnt += 1
+                #         # print(f'LEVELONE_EQUITIES found {equities_cnt}')
+                #         publish_levelone_equities(item)
                     
-                    elif service == "LEVELONE_OPTIONS":
-                        # print(f'LEVELONE_OPTIONS found, item:\n<{item}>\n\n')
-                        # options_cnt += 1
-                        # print(f'LEVELONE_OPTIONS found {options_cnt}')
-                        publish_levelone_options(item)
-                        pass
+                #     elif service == "LEVELONE_OPTIONS":
+                #         # print(f'LEVELONE_OPTIONS found, item:\n<{item}>\n\n')
+                #         # options_cnt += 1
+                #         # print(f'LEVELONE_OPTIONS found {options_cnt}')
+                #         publish_levelone_options(item)
+                #         pass
 
             # else the message was something other than a quote
             else:
@@ -583,8 +610,7 @@ def message_processor():
         time.sleep(0.001)
 
 
-       
-
+    
 
 def extract_strike_from_sym(sym):
     # print(f'946 sym type:{type(sym)}, value:{sym}')  
@@ -1000,85 +1026,44 @@ def update_quote(client):
 
             try:
                 put_quote = client.quote(put_opt_sym).json()
+                
             except Exception as e:
                 # Handle any exceptions that might occur
                 print(f"client.quote(put_opt_sym): An error occurred: {e}")
                 return
-
-
-
-
-
+            
+            publish_raw_queried_quote(put_quote)
 
 
             # print(f'put_quote type:{type(put_quote)}, data:\n')
             # pprint.pprint(put_quote)
 
-            # Save 'askPrice', 'bidPrice', and 'closePrice' in separate variables
-            # Save 'askPrice', 'bidPrice', and 'closePrice' in separate variables
-            key = list(put_quote.keys())[0]
-            # print(f'key:{key}')
-            put_ask = put_quote[key]['quote']['askPrice']
-            # print(f'put_ask:{put_ask}')
-            put_bid = put_quote[key]['quote']['bidPrice']
-            # print(f'put_bid:{put_bid}')
-            put_last = put_quote[key]['quote']['closePrice']
-            # print(f'put_last:{put_last}')
-            put_symbol = put_quote[key]['symbol']
-            # print(f'put_symbol:{put_symbol}')
-            stripped_put_sym = put_symbol.replace(" ", "")
-            # print(f'stripped_put_sym:{stripped_put_sym}')
+            # # Save 'askPrice', 'bidPrice', and 'closePrice' in separate variables
+            # # Save 'askPrice', 'bidPrice', and 'closePrice' in separate variables
+            # key = list(put_quote.keys())[0]
+            # # print(f'key:{key}')
+            # put_ask = put_quote[key]['quote']['askPrice']
+            # # print(f'put_ask:{put_ask}')
+            # put_bid = put_quote[key]['quote']['bidPrice']
+            # # print(f'put_bid:{put_bid}')
+            # put_last = put_quote[key]['quote']['closePrice']
+            # # print(f'put_last:{put_last}')
+            # put_symbol = put_quote[key]['symbol']
+            # # print(f'put_symbol:{put_symbol}')
+            # stripped_put_sym = put_symbol.replace(" ", "")
+            # # print(f'stripped_put_sym:{stripped_put_sym}')
 
-            pub_topic = basic_topic + stripped_put_sym + "/bid"
-            # print(f' bid pub_topic:{pub_topic}')
-            publish_quote(pub_topic, put_bid)
+            # pub_topic = basic_topic + stripped_put_sym + "/bid"
+            # # print(f' bid pub_topic:{pub_topic}')
+            # publish_quote(pub_topic, put_bid)
 
-            pub_topic = basic_topic + stripped_put_sym + "/ask"
-            # print(f' ask pub_topic:{pub_topic}')
-            publish_quote(pub_topic, put_ask)
+            # pub_topic = basic_topic + stripped_put_sym + "/ask"
+            # # print(f' ask pub_topic:{pub_topic}')
+            # publish_quote(pub_topic, put_ask)
 
-            # pub_topic = basic_topic + stripped_put_sym + "/last"
-            # # print(f'last pub_topic:{pub_topic}')
-            # publish_quote(pub_topic, put_last)
-
-
-
-
-
-
-
-
-            # # Convert the float to a string
-            # temp_last_str = str(put_last)
-
-            # # Split the string at the decimal point
-            # parts = temp_last_str.split('.')
-
-            # # Determine the number of decimal places
-            # if len(parts) > 1:
-            #     decimal_places = len(parts[1])
-            # else:
-            #     decimal_places = 0
-
-            # if decimal_places > 2:
-            #     print(f'593 published pub_topic quote:\n  topic type{type(pub_topic)} data:{pub_topic}\n  payload put_last type{type(put_last)} data:{put_last}')
-
-            #     print(f'The number of decimal places in temp_last is: {decimal_places}')
-
-            #     print(f'put_quote type:{type(put_quote)}, data:\n{put_quote}')
-
-
-
-
-
-
-
-
-
-
-
-
-
+            # # pub_topic = basic_topic + stripped_put_sym + "/last"
+            # # # print(f'last pub_topic:{pub_topic}')
+            # # publish_quote(pub_topic, put_last)
 
 
 
@@ -1098,45 +1083,46 @@ def update_quote(client):
 
             try:
                 call_quote = client.quote(call_opt_sym).json()
+                
             except Exception as e:
                 # Handle any exceptions that might occur
                 print(f"client.quote(call_opt_sym): An error occurred: {e}")
                 return
-
-
-
+            
+            publish_raw_queried_quote(call_quote)
+            
 
             # print(f'call_quote type:{type(call_quote)}, data:\n')
             # pprint.pprint(call_quote)
 
 
 
-            # Save 'askPrice', 'bidPrice', and 'closePrice' in separate variables
-            # Save 'askPrice', 'bidPrice', and 'closePrice' in separate variables
-            key = list(call_quote.keys())[0]
-            # print(f'key:{key}')
-            call_ask = call_quote[key]['quote']['askPrice']
-            # print(f'call_ask:{call_ask}')
-            call_bid = call_quote[key]['quote']['bidPrice']
-            # print(f'cll_bid:{call_bid}')
-            call_last = call_quote[key]['quote']['closePrice']
-            # print(f'call_last:{call_last}')
-            call_symbol = call_quote[key]['symbol']
-            # print(f'call_symbol:{call_symbol}')
-            stripped_call_sym = call_symbol.replace(" ", "")
-            # print(f'stripped_call_sym:{stripped_call_sym}')
+            # # Save 'askPrice', 'bidPrice', and 'closePrice' in separate variables
+            # # Save 'askPrice', 'bidPrice', and 'closePrice' in separate variables
+            # key = list(call_quote.keys())[0]
+            # # print(f'key:{key}')
+            # call_ask = call_quote[key]['quote']['askPrice']
+            # # print(f'call_ask:{call_ask}')
+            # call_bid = call_quote[key]['quote']['bidPrice']
+            # # print(f'cll_bid:{call_bid}')
+            # call_last = call_quote[key]['quote']['closePrice']
+            # # print(f'call_last:{call_last}')
+            # call_symbol = call_quote[key]['symbol']
+            # # print(f'call_symbol:{call_symbol}')
+            # stripped_call_sym = call_symbol.replace(" ", "")
+            # # print(f'stripped_call_sym:{stripped_call_sym}')
 
-            pub_topic = basic_topic + stripped_call_sym + "/bid"
-            # print(f' bid pub_topic:{pub_topic}')
-            publish_quote(pub_topic, call_bid)
+            # pub_topic = basic_topic + stripped_call_sym + "/bid"
+            # # print(f' bid pub_topic:{pub_topic}')
+            # publish_quote(pub_topic, call_bid)
 
-            pub_topic = basic_topic + stripped_call_sym + "/ask"
-            # print(f' ask pub_topic:{pub_topic}')
-            publish_quote(pub_topic, call_ask)
+            # pub_topic = basic_topic + stripped_call_sym + "/ask"
+            # # print(f' ask pub_topic:{pub_topic}')
+            # publish_quote(pub_topic, call_ask)
 
-            # pub_topic = basic_topic + stripped_call_sym + "/last"
-            # # print(f'last pub_topic:{pub_topic}')
-            # publish_quote(pub_topic, call_last)
+            # # pub_topic = basic_topic + stripped_call_sym + "/last"
+            # # # print(f'last pub_topic:{pub_topic}')
+            # # publish_quote(pub_topic, call_last)
 
 
 
