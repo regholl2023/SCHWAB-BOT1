@@ -89,7 +89,6 @@ def my_handler(message):
     message_queue.put(message)
 
 
-
 prev_put_list = None  
 prev_call_list = None     
 
@@ -102,7 +101,7 @@ def subscribe_to_options(passed_streamer_client):
 
     my_client = passed_streamer_client
 
-    my_client.send(my_client.level_one_equities("TSLA", "0,1,2,3,4,5,6,7,8"))
+    # my_client.send(my_client.level_one_equities("TSLA", "0,1,2,3,4,5,6,7,8"))
 
     # Extract each put symbol, create a comma-separated string, and subscribe
     put_list = ', '.join(item['Symbol'] for item in put_strike_tbl)
@@ -492,9 +491,11 @@ def is_message_ADD(json_message):
         return False
 
 
+processor_msg_cnt = 0
 def message_processor():
     global gbl_quit_flag
     global gbl_market_open_flag
+    global processor_msg_cnt
 
     while gbl_market_open_flag == False:
         # print(f'294 waiting for market open')
@@ -503,12 +504,12 @@ def message_processor():
 
     equities_cnt = 0
     options_cnt = 0
-    # msg_cnt = 0
+    msg_cnt = 0
 
 
     last_message = ""
     while True:
-        time.sleep(0.25)
+        
 
         if gbl_market_open_flag == False:
             # print(f'930 waiting for market open')
@@ -521,10 +522,16 @@ def message_processor():
             break
 
         last_message = message_queue.get()
-        # msg_cnt += 1
-        # print(f'\n--------------msg_cnt:{msg_cnt}-----------------')
-        # print(f'last_message:\n{last_message}')
-        # print()
+
+        # ignore LOGIN and ADD messages
+
+        if "ADD command succeeded" in last_message:
+            # print(f'got ADD command succeeded message')
+            continue
+
+        if "LOGIN" in last_message:
+            # print(f'got LOGIN message')
+            continue
 
 
         try:
@@ -571,6 +578,9 @@ def message_processor():
 
         except json.JSONDecodeError as e:
             print(f'284 Error decoding JSON: {e}')
+
+
+        time.sleep(0.001)
 
 
        
