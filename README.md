@@ -32,6 +32,6 @@ SPX quotes and 0DTE SPX option quotes. The streamer monitors SPX open/high/low/c
 expands that range another 20 strikes.  That expanded range is used for streaming quote subscriptions with Schwab API.  
 As SPX reaches new daily highs or lows, that range of strike quotes automatically expands. 
 
-As streaming quotes are received from Schwab, they are re-published through the localhost mqtt broker using this mqtt topic:
+As streaming quotes are received from Schwab, they are re-published through the localhost mqtt broker using this mqtt topic: <br>
 schwab/stream
 with the quote data as payload
