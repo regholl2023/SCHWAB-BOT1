@@ -1,5 +1,9 @@
-# Ignore .env files
-.env
+## .gitignore
 
-# Other files and directories to ignore
+# User-specific files
+*.env
+
+# Ignore all CSV files recursively
+**/*.csv
+
 
