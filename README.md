@@ -15,6 +15,7 @@ https://github.com/tylerebowers/Schwab-API-Python
 Follow the instructions in schwabdev README
 
 Your project directory must contain a .env file with these contents
+
 MY_APP_KEY=<your_schwab_app_key>
 MY_SECRET_KEY=<your_schwab_secret_key>
 TOKENS_FILE_PATH=<tokens_file_pathspec>
