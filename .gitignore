@@ -1,9 +1,0 @@
-# Ignore .env files
-.env
-
-# Ignore .csv files
-.csv
-
-
-# Other files and directories to ignore
-
