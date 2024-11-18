@@ -25,8 +25,18 @@ message_queue = queue.Queue()
 # resource lock (mutex)
 message_lock = threading.Lock()
 
+
+def get_version():
+
+    with open("VERSION") as f:
+        return f.read().strip()
+    
+
+
 # Global variables
 gbl_spx_price_fl = 0.0
+
+gbl_version = ""
 
 gbl_quit_flag = False
 gbl_resubscribe_needed = False
@@ -1115,9 +1125,6 @@ def update_quote(client):
 
 
 
-
-
-
 def main():
     global gbl_quit_flag
     global mqtt_client_tx
@@ -1129,7 +1136,11 @@ def main():
     global todays_epoch_time
     global gbl_system_error_flag
     global gbl_market_open_flag
+    global gbl_version
 
+
+    gbl_version = get_version()
+    print(f'\nschwab-stream app version {gbl_version}\n')
     
 
     main_loop_seconds_count = 0
@@ -1250,7 +1261,6 @@ def main():
     sys.exit(0)
 
 if __name__ == '__main__':
-    print("streamer app")
     main()
 
 
