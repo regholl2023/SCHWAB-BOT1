@@ -1,9 +1,5 @@
-# Ignore .env files
-.env
+## .gitignore
 
-# Ignore .csv files
+# User-specific files
+*.env
 *.csv
-
-
-# Other files and directories to ignore 
-
