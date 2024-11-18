@@ -160,21 +160,25 @@ def streamer_thread(client):
     global gbl_system_error_flag
     global gbl_resubscribe_needed
     global gbl_market_open_flag
-    
 
+    # print(f'in streamer_thread()')
+    
     while gbl_market_open_flag == False:
         # print(f'839 waiting for market open')
         time.sleep(1)
 
 
     # create the streamer client
+    # print(f'creating streamer client')
     strm_client = client.stream
 
 
     # start the stream message handler 
+    # print(f'starting streamer handler')
     strm_client.start(my_handler)
 
     # subscribe to SPX (schwab api requires "$SPX")
+    # print(f'subscribing to $SPX')
     strm_client.send(strm_client.level_one_equities("$SPX", "0,1,2,3,4,5,6,7,8"))
 
     # streamer.send(streamer.level_one_equities("$SPX, TSLA, AAPL", "0,1,2,3,4,5,6,7,8"))
@@ -221,7 +225,7 @@ def streamer_thread(client):
 
         if gbl_resubscribe_needed == True:
 
-            print(f'in streamer thread, re-subscribe needed')
+            # print(f'in streamer thread, re-subscribe needed')
             gbl_resubscribe_needed = False
             subscribe_to_schwab(client)
             subscribe_to_options(strm_client)
@@ -533,9 +537,13 @@ def message_processor():
     global gbl_market_open_flag
     global processor_msg_cnt
 
+
     while gbl_market_open_flag == False:
         # print(f'294 waiting for market open')
         time.sleep(1)
+
+
+    # print(f'in message_processor() when market is open')
 
 
     equities_cnt = 0
@@ -1141,6 +1149,8 @@ def update_quote(client):
 
 
 
+def trading_session_loop():
+    pass
 
 
 def system_loop():
@@ -1196,7 +1206,7 @@ def system_loop():
 
 
 
-    # run for a trading session
+    # run once market is open
     while True:
 
         gbl_system_error_flag = False
@@ -1211,11 +1221,16 @@ def system_loop():
         force_quit_count = 0 
         
         
-        # main trading session loop
+        # trading session loop
         while True:
 
-            if gbl_quit_flag == True:
-                print(f'quit signal received in main()')
+            if gbl_quit_flag == True or gbl_system_error_flag == True:
+                
+                if gbl_quit_flag == True:
+                    print(f'gbl_quit_flag == True in system_loop()')
+
+                if gbl_system_error_flag == True:
+                    print(f'gbl_system_error_flag == True in system_loop()')
 
                 print(f'waiting for streamer_thread_obj to finish')
                 streamer_thread_obj.join()
@@ -1224,7 +1239,7 @@ def system_loop():
                 print(f'waiting for message_processor_thread to finish')
                 message_processor_thread.join()
                 print(f'message_processor_thread has finished')
-                break
+                return
 
             
             #main loop wait
@@ -1242,28 +1257,30 @@ def system_loop():
                     # break out of main trading session loop
                     break
 
-            if gbl_system_error_flag == True:
-                # break out of main trading session loop
-                print(f'gbl_system_error_flag was set')
-                break
-
             else:
                 pass
 
 
-            # FIX ME
-            force_quit_count += 1
-            if force_quit_count > 20:
-                print(f'forcing gbl_quit_flag True')
-                gbl_quit_flag = True
-            else:
-                print(f'force_quit_count:{force_quit_count}')
+            # # force quit/error
+            # force_quit_count += 1
+            # if force_quit_count >= 13:
+            #     # print(f'forcing gbl_quit_flag True')
+            #     # gbl_quit_flag = True
+            #     print(f'gbl_system_error_flag True')
+            #     gbl_system_error_flag = True
+            # else:
+            #     print(f'force_quit_count:{force_quit_count}')
 
 
 
-        if gbl_quit_flag == True:
-            # break out of run for a trading session
+        if gbl_quit_flag:
+            # break out of trading session loop
             break
+
+
+        # trading session loop
+
+    # run once market is open
 
 
 
