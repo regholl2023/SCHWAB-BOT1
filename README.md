@@ -33,5 +33,5 @@ expands that range another 20 strikes.  That expanded range is used for streamin
 As SPX reaches new daily highs or lows, that range of strike quotes automatically expands. 
 
 As streaming quotes are received from Schwab, they are re-published through the localhost mqtt broker using this mqtt topic: <br>
-schwab/stream <br>
+___schwab/stream___ <br>
 with the quote data as payload
