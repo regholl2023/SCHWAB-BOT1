@@ -2,6 +2,7 @@
 
 # User-specific files
 *.env
+*.log
 
 # Ignore all CSV files recursively
 **/*.csv
