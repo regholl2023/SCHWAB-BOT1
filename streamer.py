@@ -26,10 +26,21 @@ message_queue = queue.Queue()
 message_lock = threading.Lock()
 
 
+# Get the streamer version number from the file VERSIONS
 def get_version():
+    return_str = "None"
+    try:
+        with open("VERSION") as f:
+            return_str = f.read().strip()
+    except FileNotFoundError:
+        return_str = "Error: VERSION file does not exist"
+    except OSError as e:
+        return_str = f"Error: An OS error occurred: {e}"
 
-    with open("VERSION") as f:
-        return f.read().strip()
+    except Exception as e:
+        return_str = f"Error: An unexpected error occurred: {e}"
+
+    return return_str
     
 
 
@@ -167,6 +178,8 @@ def streamer_thread(client):
     global gbl_resubscribe_needed
     global gbl_market_open_flag
 
+    # print(f'in streamer_thread()')
+    
     while gbl_market_open_flag == False:
         # print(f'839 waiting for market open')
         time.sleep(1)
@@ -181,6 +194,7 @@ def streamer_thread(client):
 
 
     # create the streamer client
+
     try:
         strm_client = client.stream
 
@@ -209,6 +223,7 @@ def streamer_thread(client):
         print(f"strm_client.send(strm_client.level_one_equities($SPX): An error occurred: {e}")
         gbl_system_error_flag = True
         return
+
 
     # streamer.send(streamer.level_one_equities("$SPX, TSLA, AAPL", "0,1,2,3,4,5,6,7,8"))
     # appl_keys = "AAPL  241108C00190000, AAPL  241108C00180000"
@@ -267,7 +282,7 @@ def streamer_thread(client):
     while True:
         time.sleep(1)
 
-        if gbl_quit_flag == True:
+        if gbl_quit_flag == True or gbl_system_error_flag == True:
             print(f'streamer_thread detects quit signal')
             break
 
@@ -280,7 +295,7 @@ def streamer_thread(client):
 
         if gbl_resubscribe_needed == True:
 
-            print(f'in streamer thread, re-subscribe needed')
+            # print(f'in streamer thread, re-subscribe needed')
             gbl_resubscribe_needed = False
             subscribe_to_schwab(client)
             subscribe_to_options(strm_client)
@@ -592,12 +607,17 @@ def is_message_ADD(json_message):
 processor_msg_cnt = 0
 def message_processor():
     global gbl_quit_flag
+    global gbl_system_error_flag
     global gbl_market_open_flag
     global processor_msg_cnt
+
 
     while gbl_market_open_flag == False:
         # print(f'294 waiting for market open')
         time.sleep(1)
+
+
+    # print(f'in message_processor() when market is open')
 
 
     equities_cnt = 0
@@ -615,7 +635,7 @@ def message_processor():
             continue
 
 
-        if gbl_quit_flag == True:
+        if gbl_quit_flag == True or gbl_system_error_flag == True:
             print(f'exiting message_processor')
             break
 
@@ -1219,8 +1239,14 @@ def update_quote(client):
 
 
 
-def main():
+
+def trading_session_loop():
+    pass
+
+
+def system_loop():
     global gbl_quit_flag
+    global gbl_system_error_flag
     global mqtt_client_tx
 
     # global gbl_open_fl
@@ -1289,7 +1315,7 @@ def main():
 
 
 
-    # run for a trading session
+    # run once market is open
     while True:
 
         gbl_system_error_flag = False
@@ -1300,13 +1326,20 @@ def main():
         init_check_spx_last()
 
  
-        main_loop_seconds_count = 0  
+        main_loop_seconds_count = 0 
+        force_quit_count = 0 
         
-        # main trading session loop
+        
+        # trading session loop
         while True:
 
-            if gbl_quit_flag == True:
-                print(f'quit signal received in main()')
+            if gbl_quit_flag == True or gbl_system_error_flag == True:
+                
+                if gbl_quit_flag == True:
+                    print(f'gbl_quit_flag == True in system_loop()')
+
+                if gbl_system_error_flag == True:
+                    print(f'gbl_system_error_flag == True in system_loop()')
 
                 print(f'waiting for streamer_thread_obj to finish')
                 streamer_thread_obj.join()
@@ -1315,12 +1348,13 @@ def main():
                 print(f'waiting for message_processor_thread to finish')
                 message_processor_thread.join()
                 print(f'message_processor_thread has finished')
-                break
+                return
 
             
             #main loop wait
             time.sleep(1.0)
             main_loop_seconds_count += 1
+
 
             check_for_subscribe_update(client)
             update_quote(client)
@@ -1328,49 +1362,71 @@ def main():
             # occasionally check to see if the market is still open
             if main_loop_seconds_count % 10 == 0:
 
-                if is_market_open():
+                if is_market_open() != True:
                     # break out of main trading session loop
                     break
-
-            if gbl_system_error_flag == True:
-                # break out of main trading session loop
-                break
 
             else:
                 pass
 
 
-        if gbl_quit_flag == True:
-            # break out of run for a trading session
+            # # force quit/error
+            # force_quit_count += 1
+            # if force_quit_count >= 13:
+            #     # print(f'forcing gbl_quit_flag True')
+            #     # gbl_quit_flag = True
+            #     print(f'gbl_system_error_flag True')
+            #     gbl_system_error_flag = True
+            # else:
+            #     print(f'force_quit_count:{force_quit_count}')
+
+
+
+        if gbl_quit_flag:
+            # break out of trading session loop
             break
 
 
+        # trading session loop
+
+    # run once market is open
 
 
 
-    
+    print(f'exiting system_loop()')
 
 
-        
+    time.sleep(0.25)
 
 
-    print(f'exited mai() while loop')
-
-    
-
-    print("exiting main() ")
-    time.sleep(1)
-
-    keyboard.clear_all_hotkeys()
-    keyboard.unhook_all()
 
 
-    # Flush output buffers
+main_loop_count = 0
+def main():
+    global gbl_quit_flag
+    global gbl_system_error_flag
+    global main_loop_count
 
-    sys.stdout.flush()
+    main_loop_count 
+    while True:
+        main_loop_count += 1
+        print(f'main_loop_count:{main_loop_count}')
+
+        gbl_system_error_flag = False
+
+        print(f'calling system_loop')
+        system_loop()
+        print(f'returned from system_loop')
+
+        if gbl_quit_flag == True:
+            break
+
+
+    print(f'exiting main()')
 
     # Use sys.exit to terminate cleanly
     sys.exit(0)
+
 
 if __name__ == '__main__':
     main()
