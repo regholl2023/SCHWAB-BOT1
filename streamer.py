@@ -1240,10 +1240,6 @@ def update_quote(client):
 
 
 
-def trading_session_loop():
-    pass
-
-
 def system_loop():
     global gbl_quit_flag
     global gbl_system_error_flag
@@ -1260,16 +1256,14 @@ def system_loop():
 
 
     gbl_version = get_version()
-    print(f'\nschwab-stream app version {gbl_version}\n')
+    temp_str = f'schwab-stream app version {gbl_version}'
+    print(f'\n{temp_str}\n')
+    logging.info(temp_str)
     
 
     main_loop_seconds_count = 0
 
-    # logging.basicConfig(level=logging.INFO)
-    logging.basicConfig(filename='streamer.log', level=logging.INFO, 
-        format='%(asctime)s - %(levelname)s - %(message)s')
     
-
 
     app_key, secret_key, my_tokens_file = load_env_variables()
 
@@ -1330,16 +1324,20 @@ def system_loop():
         force_quit_count = 0 
         
         
-        # trading session loop
+        # supervision loop 
         while True:
 
             if gbl_quit_flag == True or gbl_system_error_flag == True:
                 
                 if gbl_quit_flag == True:
-                    print(f'gbl_quit_flag == True in system_loop()')
+                    temp_str = f"quit signal ('q' character) detected"
+                    print(temp_str)
+                    logging.info(temp_str)
 
                 if gbl_system_error_flag == True:
-                    print(f'gbl_system_error_flag == True in system_loop()')
+                    temp_str = f'system error occurred'
+                    print(temp_str)
+                    logging.error(temp_str)
 
                 print(f'waiting for streamer_thread_obj to finish')
                 streamer_thread_obj.join()
@@ -1348,6 +1346,7 @@ def system_loop():
                 print(f'waiting for message_processor_thread to finish')
                 message_processor_thread.join()
                 print(f'message_processor_thread has finished')
+
                 return
 
             
@@ -1373,12 +1372,19 @@ def system_loop():
             # # force quit/error
             # force_quit_count += 1
             # if force_quit_count >= 13:
-            #     # print(f'forcing gbl_quit_flag True')
+
+            #     # temp_str = f'forcing gbl_quit_flag True'
+            #     # logging.info(temp_str)
+            #     # print(temp_str)
             #     # gbl_quit_flag = True
-            #     print(f'gbl_system_error_flag True')
+
+            #     temp_str = f'forcing gbl_system_error_flag True'
+            #     logging.info(temp_str)
+            #     print(temp_str)
             #     gbl_system_error_flag = True
+
             # else:
-            #     print(f'force_quit_count:{force_quit_count}')
+            #     print(f'force_count:{force_quit_count}')
 
 
 
@@ -1407,22 +1413,29 @@ def main():
     global gbl_system_error_flag
     global main_loop_count
 
+    # logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(filename='streamer.log', level=logging.INFO, 
+        format='%(asctime)s - %(levelname)s - %(message)s')
+
     main_loop_count 
     while True:
         main_loop_count += 1
-        print(f'main_loop_count:{main_loop_count}')
+        # print(f'main_loop_count:{main_loop_count}')
 
         gbl_system_error_flag = False
 
-        print(f'calling system_loop')
+        # print(f'calling system_loop')
         system_loop()
-        print(f'returned from system_loop')
+        # print(f'returned from system_loop')
 
         if gbl_quit_flag == True:
             break
 
 
-    print(f'exiting main()')
+    temp_str = "exiting schwab-stream"
+    print(f'\n{temp_str}\n')
+    logging.info(temp_str)
+    time.sleep(0.525)
 
     # Use sys.exit to terminate cleanly
     sys.exit(0)
