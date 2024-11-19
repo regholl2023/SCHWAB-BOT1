@@ -111,6 +111,7 @@ prev_call_list = None
 def subscribe_to_options(passed_streamer_client): 
     global prev_put_list  
     global prev_call_list
+    global gbl_system_error_flag
 
     # print(f'streamer_client type:{type(passed_streamer_client)}, value:{passed_streamer_client}')
 
@@ -121,13 +122,29 @@ def subscribe_to_options(passed_streamer_client):
     # Extract each put symbol, create a comma-separated string, and subscribe
     put_list = ', '.join(item['Symbol'] for item in put_strike_tbl)
     # print(f'2P put_list type:{type(put_list)}, data:]\n{put_list}')
-    my_client.send(my_client.level_one_options(put_list, "0,1,2,3,4,5,6,7,8,10,28,29,30,31,32"))
+
+    try:
+        my_client.send(my_client.level_one_options(put_list, "0,1,2,3,4,5,6,7,8,10,28,29,30,31,32"))
+    
+    except Exception as e:
+        print(f"my_client.send for put_list: An error occurred: {e}")
+        gbl_system_error_flag = True
+        return
+
 
 
     # # Extract each call symbol, create a comma-separated string, and subscribe
     call_list = ', '.join(item['Symbol'] for item in call_strike_tbl)
     # print(f'2C call_list type:{type(call_list)}, data:]\n{call_list}')
-    my_client.send(my_client.level_one_options(call_list, "0,1,2,3,4,5,6,7,8,10,28,29,30,31,32"))
+
+
+    try:
+        my_client.send(my_client.level_one_options(call_list, "0,1,2,3,4,5,6,7,8,10,28,29,30,31,32"))
+
+    except Exception as e:
+        print(f"my_client.send for call_list: An error occurred: {e}")
+        gbl_system_error_flag = True
+        return
 
     if put_list != prev_put_list:
         if prev_put_list != None:
@@ -168,18 +185,45 @@ def streamer_thread(client):
         time.sleep(1)
 
 
+    # print(f'in streamer_thread(), market is open')
+
+    subscribe_to_schwab(client)
+    if gbl_system_error_flag == True:
+        print(f'in streamer_thread() startup, gbl_system_error_flag == True')
+        return
+
+
     # create the streamer client
-    # print(f'creating streamer client')
-    strm_client = client.stream
+
+    try:
+        strm_client = client.stream
+
+    except Exception as e:
+        print(f"strm_client = client.stream: An error occurred: {e}")
+        gbl_system_error_flag = True
+        return
 
 
-    # start the stream message handler 
-    # print(f'starting streamer handler')
-    strm_client.start(my_handler)
+    # start the stream message handler
+    try: 
+        strm_client.start(my_handler)
+
+    except Exception as e:
+        print(f"strm_client.start(): An error occurred: {e}")
+        gbl_system_error_flag = True
+        return
+
+
 
     # subscribe to SPX (schwab api requires "$SPX")
-    # print(f'subscribing to $SPX')
-    strm_client.send(strm_client.level_one_equities("$SPX", "0,1,2,3,4,5,6,7,8"))
+    try:
+        strm_client.send(strm_client.level_one_equities("$SPX", "0,1,2,3,4,5,6,7,8"))
+
+    except Exception as e:
+        print(f"strm_client.send(strm_client.level_one_equities($SPX): An error occurred: {e}")
+        gbl_system_error_flag = True
+        return
+
 
     # streamer.send(streamer.level_one_equities("$SPX, TSLA, AAPL", "0,1,2,3,4,5,6,7,8"))
     # appl_keys = "AAPL  241108C00190000, AAPL  241108C00180000"
@@ -192,11 +236,33 @@ def streamer_thread(client):
     # subscribe to the desired SPXW options
 
     # TODO: ensure that put_strike_tbl and call_strike_tbl have data
+    wait_for_strike_tbl_count = 0
+    while True:
+        time.sleep(1)
+        put_len = len(put_strike_tbl)
+        call_len = len(call_strike_tbl)
 
-    # print(f'put_strike_tbl type: {type(put_strike_tbl)}, data:\n{put_strike_tbl}')
-    # pretty_json = json.dumps(put_strike_tbl, indent=2)
-    # print(f'put_strike_tbl type:\n{pretty_json}')
+        if put_len == 0 or call_len == 0:
+            print(f'waiting for put_strike_table, len:{put_len}, and call_strike_tbl, len:{call_len}, count:{wait_for_strike_tbl_count}')
+            continue
 
+        else:
+            break
+
+
+    # if not put_strike_tbl:
+    #     temp_str = f'put_strike_table was empty'
+    #     logging.error(temp_str)
+    #     print(temp_str)
+    #     return
+    
+    # if not call_strike_tbl:
+    #     temp_str = f'call_strike_table was empty'
+    #     logging.error(temp_str)
+    #     print(temp_str)
+    #     return
+
+    
 
     # Extract each put symbol, create a comma-separated string, and subscribe
     put_list = ', '.join(item['Symbol'] for item in put_strike_tbl)
@@ -220,6 +286,10 @@ def streamer_thread(client):
             print(f'streamer_thread detects quit signal')
             break
 
+        if gbl_system_error_flag == True:
+            print(f'gbl_system_error_flag == True')
+            break
+
         if gbl_market_open_flag == False:
             continue
 
@@ -232,9 +302,13 @@ def streamer_thread(client):
 
 
 
-    print(f'calling client.stream.stop()')
-    client.stream.stop()
-    print(f'returning from client.stream.stop()')
+    try:
+        client.stream.stop()
+
+    except Exception as e:
+        print(f"client.stream.stop(): An error occurred: {e}")
+        gbl_system_error_flag = True
+
 
     print(f'exiting streamer_thread')
 
@@ -650,9 +724,11 @@ def build_option_tables2(option_syms, option_type):
 
     if option_type == "PUT":
         put_strike_tbl = []
+        # print(f'in build_option_tables2(), type:{option_type}, zeroed out put_strike_tbl')
 
     if option_type == "CALL":
         call_strike_tbl = []
+        # print(f'in build_option_tables2(), type:{option_type}, zeroed out call_strike_tbl')
 
     for item in option_syms:
         # print(f'294 item:<{item}>')
@@ -669,11 +745,18 @@ def build_option_tables2(option_syms, option_type):
             new_put_option = {"Type": "PUT", "Strike": strike_int, "Bid": 0.0, "Ask": 0.0, "Last": 0.0, "Symbol": item}
             # print(f'884 new put to add:{new_put_option}')
             put_strike_tbl.append(new_put_option)
-                    
+
+
+
+    # if option_type == "CALL":
+    #     print(f'end of build_option_tables2(), type:{option_type}, call_strike_tbl len:{len(call_strike_tbl)}')
+
+
+    # if option_type == "PUT":
+    #     print(f'end of build_option_tables2(), type:{option_type}, put_strike_tbl len:{len(put_strike_tbl)}')
 
 
     pass
-
 
 
 
@@ -749,7 +832,7 @@ def is_market_open():
     current_time = datetime.now(eastern)
 
     # set markets daily start/end times
-    start_time = current_time.replace(hour=9, minute=30, second=20, microsecond=0)
+    start_time = current_time.replace(hour=9, minute=33, second=10, microsecond=0)
     end_time = current_time.replace(hour=15, minute=59, second=40, microsecond=0)
 
 
@@ -804,22 +887,29 @@ def get_today_in_epoch():
 
 
 def get_current_spx(client, milliseconds_since_epoch):
+    global gbl_system_error_flag
 
 
     # Loop until we have a good response for SPX price history
     while True:
 
-        spx_history = client.price_history(
-            "$SPX", 
-            periodType='month',
-            period=1,
-            frequencyType='daily',
-            frequency=1,
-            # startDate='1731055026568',
-            # endDate='1731055026568'
-            startDate=milliseconds_since_epoch,
-            endDate=milliseconds_since_epoch
-            ).json()
+        try:
+            spx_history = client.price_history(
+                "$SPX", 
+                periodType='month',
+                period=1,
+                frequencyType='daily',
+                frequency=1,
+                # startDate='1731055026568',
+                # endDate='1731055026568'
+                startDate=milliseconds_since_epoch,
+                endDate=milliseconds_since_epoch
+                ).json()
+            
+        except Exception as e:
+            print(f"spx_history = client.price_history: An error occurred: {e}")
+            gbl_system_error_flag = True
+            return
         
         # print(f'spx_history raw type:{type(spx_history)}, data:\n{spx_history}')
         
@@ -998,6 +1088,7 @@ def update_quote(client):
     global call_strike_tbl
     global last_put_index 
     global last_call_index 
+    global gbl_system_error_flag
 
     basic_topic = "schwab/option/spx/basic/"
 
@@ -1050,8 +1141,8 @@ def update_quote(client):
                 put_quote = client.quote(put_opt_sym).json()
                 
             except Exception as e:
-                # Handle any exceptions that might occur
                 print(f"client.quote(put_opt_sym): An error occurred: {e}")
+                gbl_system_error_flag = True
                 return
             
             publish_raw_queried_quote(put_quote)
@@ -1107,8 +1198,8 @@ def update_quote(client):
                 call_quote = client.quote(call_opt_sym).json()
                 
             except Exception as e:
-                # Handle any exceptions that might occur
                 print(f"client.quote(call_opt_sym): An error occurred: {e}")
+                gbl_system_error_flag = True
                 return
             
             publish_raw_queried_quote(call_quote)
@@ -1174,13 +1265,31 @@ def system_loop():
 
     main_loop_seconds_count = 0
 
-    logging.basicConfig(level=logging.INFO)
+    # logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(filename='streamer.log', level=logging.INFO, 
+        format='%(asctime)s - %(levelname)s - %(message)s')
+    
 
 
     app_key, secret_key, my_tokens_file = load_env_variables()
 
     # create schwabdev client
-    client = schwabdev.Client(app_key, secret_key, tokens_file=my_tokens_file)
+    create_client_count = 0
+
+    # while we try to create a schwabdev client
+    while True:
+        try:
+            client = schwabdev.Client(app_key, secret_key, tokens_file=my_tokens_file)
+            break
+
+        except Exception as e:
+            create_client_count += 1
+            print(f"client = schwabdev.Client: An error occurred: {e}.  Attempt # {create_client_count}. Retrying")
+            time.sleep(1)
+            continue
+    # while we try to create a schwabdev client
+
+    print(f"schwabdev client created")
 
     
 
