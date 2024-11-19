@@ -148,7 +148,8 @@ def subscribe_to_options(passed_streamer_client):
 
     if put_list != prev_put_list:
         if prev_put_list != None:
-            print(f'new put_list is different, new put_list:\n:{put_list}\nprev_put_list:\n{prev_put_list}')
+            pass
+            # print(f'new put_list is different, new put_list:\n:{put_list}\nprev_put_list:\n{prev_put_list}')
             
         prev_put_list = put_list
 
@@ -159,7 +160,8 @@ def subscribe_to_options(passed_streamer_client):
 
     if call_list != prev_call_list:
         if prev_call_list != None:
-            print(f'new call_list is different, new call_list:\n:{call_list}\nprev_put_list:\n{prev_call_list}')
+            pass
+            # print(f'new call_list is different, new call_list:\n:{call_list}\nprev_put_list:\n{prev_call_list}')
 
         prev_call_list = call_list
 
@@ -636,10 +638,24 @@ def message_processor():
 
 
         if gbl_quit_flag == True or gbl_system_error_flag == True:
-            print(f'exiting message_processor')
+            print(f'exiting message_processor due to quit signal')
             break
 
-        last_message = message_queue.get()
+        
+        # get the next messages from the schwab streaming message handlder
+
+        # Note: we need to be able to exit this thread in the event of 
+        # a sytem error. So we used a timeout to check for a system error.
+        while True:
+            try:
+                last_message = message_queue.get(timeout=1)  # 1 second timeout
+                break
+
+            except queue.Empty: 
+                # if no message has been received and there is a system error    
+                if gbl_system_error_flag == True:
+                    return
+
 
         # ignore LOGIN and ADD messages
 
@@ -889,6 +905,11 @@ def get_today_in_epoch():
 def get_current_spx(client, milliseconds_since_epoch):
     global gbl_system_error_flag
 
+    open_fl = None
+    high_fl = None
+    low_fl = None
+    close_fl = None
+
 
     # Loop until we have a good response for SPX price history
     while True:
@@ -925,15 +946,32 @@ def get_current_spx(client, milliseconds_since_epoch):
             break
 
         except KeyError:
-            print("Error while looking for SPX candle: 'candles' key not found in spx_history")
+            temp_str = f"Error while looking for SPX candle: 'candles' key not found in spx_history"
+            print(temp_str)
+            pretty_json = json.dumps(spx_history, indent=2)
+            print(f'spx_history:\n{pretty_json}\n\n')
+            logging.error(temp_str)
+            gbl_system_error_flag = True
+            return open_fl, high_fl, low_fl, close_fl
+        
         except IndexError:
-            print("Error while looking for SPX candle: 'candles' list is empty")
-        except Exception as e:
-            print(f'An unexpected error occurred while looking for SPX candle:: {e}')
+            temp_str =f"Error while looking for SPX candle: 'candles' list is empty"
+            print(temp_str)
+            pretty_json = json.dumps(spx_history, indent=2)
+            print(f'spx_history:\n{pretty_json}\n\n')
+            logging.error(temp_str)
+            gbl_system_error_flag = True
+            return open_fl, high_fl, low_fl, close_fl
 
-        pretty_json = json.dumps(spx_history, indent=2)
-        print(f'Unable to get todays candlestick for SPX!!!!!!  data:\n{pretty_json}\n\n')
-        time.sleep(5)
+        except Exception as e:
+            temp_str = f'An unexpected error occurred while looking for SPX candle: {e}'
+            print(temp_str)
+            pretty_json = json.dumps(spx_history, indent=2)
+            print(f'spx_history:\n{pretty_json}\n\n')
+            logging.error(temp_str)
+            gbl_system_error_flag = True
+            return open_fl, high_fl, low_fl, close_fl
+
 
 
     # Save the open, high, low, and close values as float variables
@@ -964,6 +1002,7 @@ def check_for_subscribe_update(client):
     global last_spx_check_time
     global gbl_close_fl
     global gbl_resubscribe_needed
+    global gbl_system_error_flag
 
     CHECK_INTERVAL = 20
 
@@ -979,6 +1018,14 @@ def check_for_subscribe_update(client):
         # print(f'Updating last_spx_check_time to {last_spx_check_time}')
 
         open, high, low, close = get_current_spx(client, todays_epoch_time)
+
+        if open == None or high == None or low == None or close == None:
+            temp_str = f"in check_for_subscribe_update() get_current_spx returned one or more 'None' value(s)"
+            print(temp_str)
+            logging.error(temp_str)
+            gbl_system_error_flag = True
+            return
+
 
         spx_change = abs(gbl_close_fl - close)
         # print(f'spx_change type:{type(spx_change)}, value:{spx_change}')
@@ -1004,6 +1051,8 @@ def check_for_subscribe_update(client):
 def build_strike_lists(client):
     global todays_epoch_time
     global gbl_close_fl
+    global gbl_system_error_flag
+
 
     strike_offset = 50
 
@@ -1013,6 +1062,16 @@ def build_strike_lists(client):
 
 
     spx_open, spx_high, spx_low, spx_close = get_current_spx(client, todays_epoch_time)
+
+    if spx_open == None or spx_high == None or spx_low == None or spx_close == None:
+        temp_str = f"in build_strike_lists() get_current_spx returned one or more 'None' value(s)"
+        print(temp_str)
+        logging.error(temp_str)
+        gbl_system_error_flag = True
+        return
+
+
+
     # print(f'SPX O type:{type(spx_open)}, O/H/L/C:{spx_open}/{spx_high}/{spx_low}/{spx_close}')
 
     # gbl_open_fl = spx_open
@@ -1239,6 +1298,15 @@ def update_quote(client):
 
 
 
+def mqtt_on_connect(client, userdata, flags, reason_code, properties=None):
+
+    if reason_code == 0:
+        print("MQTT client connected")
+
+    else:
+        print(f"MQTT client Failed to connect, return code {reason_code}")
+
+
 
 def system_loop():
     global gbl_quit_flag
@@ -1290,12 +1358,31 @@ def system_loop():
 
 
     # Create an MQTT client_tx
-    mqtt_client_tx = mqtt.Client()
+
+    try:
+        # mqtt_client_tx = mqtt.Client()
+        mqtt_client_tx = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+
+    except Exception as e:
+        print(f"mqtt_client_tx = mqtt.Client(): An error occurred: {e}")
+        return
+    
     # print(f'mqtt_client_tx: {mqtt_client_tx}')
 
+    print("MQTT client created")
 
     # Connect to the MQTT broker
-    mqtt_connect_tx_return = mqtt_client_tx.connect(mqtt_broker_address, mqtt_broker_port)
+    try:
+        # mqtt_connect_tx_return = mqtt_client_tx.connect(mqtt_broker_address, mqtt_broker_port)
+        mqtt_client_tx.connect(mqtt_broker_address, mqtt_broker_port)
+
+    except Exception as e:
+        print(f"mqtt_client_tx.connect(): An error occurred: {e}")
+        return
+    
+    print("MQTT client connected")
+
+
     # print(f'returned from client_tx.connection, connect_return: {mqtt_connect_tx_return}')
 
 
@@ -1347,6 +1434,13 @@ def system_loop():
                 message_processor_thread.join()
                 print(f'message_processor_thread has finished')
 
+                # graceful exit for mqtt client
+                temp_str = f'MQTT client shutdown'
+                print(temp_str)
+                logging.info(temp_str)
+                mqtt_client_tx.disconnect()  # Disconnect from broker
+                mqtt_client_tx.loop_stop()  # Stop network loop
+
                 return
 
             
@@ -1369,7 +1463,7 @@ def system_loop():
                 pass
 
 
-            # # force quit/error
+            # force quit/error
             # force_quit_count += 1
             # if force_quit_count >= 13:
 
