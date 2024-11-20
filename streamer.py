@@ -1339,25 +1339,6 @@ def mqtt_on_connect(client, userdata, flags, reason_code, properties=None):
         print(f"MQTT client Failed to connect, return code {reason_code}")
 
 
-# Function for the monitor_input thread
-def monitor_input():
-    global gbl_quit_flag
-    print("Monitor Input thread started. Press 'q' to quit.")
-    while not gbl_quit_flag:
-        try:
-            user_input = input()  # Blocking call for keyboard input
-            if user_input.lower() == 'q':  # Check if 'q' was pressed
-                print("Quit signal received.")
-                gbl_quit_flag = True
-                break
-        except Exception as e:
-            print(f"Error in monitor_input: {e}")
-            break
-
-    print("exiting monitor_input_thread")
-
-
-
 
 def system_loop():
     global gbl_quit_flag
@@ -1383,13 +1364,13 @@ def system_loop():
     logging.info(temp_str)
 
 
-    print(f'835-100 system_loop(), entering wait for market to open')
+    # print(f'835-100 system_loop(), entering wait for market to open')
 
     wait_for_market_to_open()
     if gbl_quit_flag == True or gbl_system_error_flag == True:
         return
     
-    print(f'835-105 system_loop(), market is now open')
+    # print(f'835-105 system_loop(), market is now open')
     
 
     app_key, secret_key, my_tokens_file = load_env_variables()
@@ -1412,13 +1393,13 @@ def system_loop():
             continue
     # while we try to create a schwabdev client
 
-    print(f'835-110 system_loop(), schwabdev client created')
+    # print(f'835-110 system_loop(), schwabdev client created')
 
     print(f"schwabdev client created")
 
     
 
-    print(f'835-120 system_loop(), attemting to create mqtt client')
+    # print(f'835-120 system_loop(), attemting to create mqtt client')
 
     # Create an MQTT client_tx
     try:
@@ -1431,11 +1412,12 @@ def system_loop():
     
     # print(f'mqtt_client_tx: {mqtt_client_tx}')
 
-    print(f'835-130 system_loop(), created mqtt client')
+    # print(f'835-130 system_loop(), created mqtt client')
+
     print("MQTT client created")
 
+    # print(f'835-140 system_loop(), attempting mqtt connection')
 
-    print(f'835-140 system_loop(), attempting mqtt connection')
     # Connect to the MQTT broker
     try:
         # mqtt_connect_tx_return = mqtt_client_tx.connect(mqtt_broker_address, mqtt_broker_port)
@@ -1445,13 +1427,13 @@ def system_loop():
         print(f"mqtt_client_tx.connect(): An error occurred: {e}")
         return
     
-    print(f'835-150 system_loop(), mqtt connected')
-    print("MQTT client connected")
+    # print(f'835-150 system_loop(), mqtt connected')
 
+    print("MQTT client connected")
 
     # print(f'returned from client_tx.connection, connect_return: {mqtt_connect_tx_return}')
 
-    print(f'835-160 system_loop(), creating threads')
+    # print(f'835-160 system_loop(), creating threads')
 
     # Start the streamer_thread
     streamer_thread_obj = Thread(target=streamer_thread, args=(client,), name="streamer_thread", daemon=True)
@@ -1461,12 +1443,8 @@ def system_loop():
     message_processor_thread = Thread(target=message_processor, name="message_processor", daemon=True)
     message_processor_thread.start()
 
-    # Start the input monitoring thread
-    input_thread = threading.Thread(target=monitor_input, name="monitor_input", daemon=True)
-    input_thread.start()
 
-
-    print(f'835-170 system_loop(), created threads')
+    # print(f'835-170 system_loop(), created threads')
 
 
     init_check_spx_last()
@@ -1475,7 +1453,7 @@ def system_loop():
     force_quit_count = 0 
 
 
-    print(f'835-180 system_loop(), entering main while loop')
+    # print(f'835-180 system_loop(), entering main while loop')
 
     # run while the market is open and while we have no system errors or quite signal
     while True:
@@ -1570,16 +1548,22 @@ def main():
     main_loop_count 
     while True:
         main_loop_count += 1
-        # print(f'main_loop_count:{main_loop_count}')
 
         gbl_system_error_flag = False
 
-        # print(f'calling system_loop')
+        # system_loop 
+        # - waits for the market to open
+        # - creates clients and connections with schwab developer and with mqtt
+        # - creates the various threads of the streamer
+        # - monitors gbl_gbl_system_error_flag and if ever set, shuts everthing down gracefully and returns
+        
         system_loop()
-        # print(f'returned from system_loop')
 
         if gbl_quit_flag == True:
             break
+
+        # the only rease we should get here is if gbl_gbl_system_error_flag had been set
+        # we will now loop around and call system_loop() again
 
 
     temp_str = "exiting schwab-stream"
