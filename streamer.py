@@ -818,6 +818,25 @@ def build_option_tables(option_map, option_type):
                     # print(f'put_strike_tbl:\n{put_strike_tbl}')
                     
 
+def get_eastern_weekday_time():
+
+    eastern = pytz.timezone('US/Eastern')
+
+    eastern_time = datetime.now(eastern)
+    day_of_week_str = eastern_time.strftime('%A')
+    date_str = eastern_time.strftime('%m/%d/%y')
+
+    current_time = datetime.now(eastern)
+    eastern_time_str = current_time.strftime('%H:%M:%S')
+    return_str = f'{day_of_week_str} {date_str} {eastern_time_str} (Eastern)'
+
+    return return_str
+
+    
+
+
+
+
 
 
 def is_market_open():
@@ -825,8 +844,6 @@ def is_market_open():
 
     now = datetime.now(timezone.utc)
     # print(f'934 now type:{type(now)}, value:{now}')
-
-
 
     # Determine if the current day is Monday through Friday
     day_of_week = now.weekday()
@@ -848,7 +865,7 @@ def is_market_open():
     current_time = datetime.now(eastern)
 
     # set markets daily start/end times
-    start_time = current_time.replace(hour=9, minute=33, second=10, microsecond=0)
+    start_time = current_time.replace(hour=9, minute=30, second=5, microsecond=0)
     end_time = current_time.replace(hour=15, minute=59, second=40, microsecond=0)
 
 
@@ -856,7 +873,7 @@ def is_market_open():
         
 
     if weekday_flag == False or current_time < start_time or current_time > end_time:
-        print(f'Market is not open.  Current day of week: {weekday_name}.  Current eastern time: {eastern_time_str}')
+        # print(f'Market is not open.  Current day of week: {weekday_name}.  Current eastern time: {eastern_time_str}')
         gbl_market_open_flag = False
         return False
     
@@ -870,20 +887,35 @@ def is_market_open():
 
 def wait_for_market_to_open():
 
+    global gbl_quit_flag
+    global gbl_system_error_flag
+
+    SECONDS_BETWEEN_CHECKS = 5
+    ITERATIONS_BETWEEN_DISPLAY = int(60 / SECONDS_BETWEEN_CHECKS)
+
 
     # loop until market is open
     market_wait_cnt = 0
+    throttle_time_display = ITERATIONS_BETWEEN_DISPLAY
     while True:
         # print(f'1 wait market cnt:{market_wait_cnt}')
         market_wait_cnt += 1
 
         if is_market_open():
             # print(f'is_market_open() returned True, exiting wait_for_market_to_open()')
+            print(f'Market is open. Current: {get_eastern_weekday_time()}')
             return
         
-        # print(f'is_market_open() returned False')
+        throttle_time_display += 1
+        if throttle_time_display >= ITERATIONS_BETWEEN_DISPLAY:
+            print(f'Market is not open. Current: {get_eastern_weekday_time()}')
+            throttle_time_display = 0
         
-        time.sleep(20)
+        
+        time.sleep(SECONDS_BETWEEN_CHECKS)
+
+        if gbl_quit_flag == True or gbl_system_error_flag == True:
+            return
 
 
 
@@ -1307,6 +1339,25 @@ def mqtt_on_connect(client, userdata, flags, reason_code, properties=None):
         print(f"MQTT client Failed to connect, return code {reason_code}")
 
 
+# Function for the monitor_input thread
+def monitor_input():
+    global gbl_quit_flag
+    print("Monitor Input thread started. Press 'q' to quit.")
+    while not gbl_quit_flag:
+        try:
+            user_input = input()  # Blocking call for keyboard input
+            if user_input.lower() == 'q':  # Check if 'q' was pressed
+                print("Quit signal received.")
+                gbl_quit_flag = True
+                break
+        except Exception as e:
+            print(f"Error in monitor_input: {e}")
+            break
+
+    print("exiting monitor_input_thread")
+
+
+
 
 def system_loop():
     global gbl_quit_flag
@@ -1323,14 +1374,22 @@ def system_loop():
     global gbl_version
 
 
+    gbl_system_error_flag = False
+
+
     gbl_version = get_version()
     temp_str = f'schwab-stream app version {gbl_version}'
     print(f'\n{temp_str}\n')
     logging.info(temp_str)
+
+
+    print(f'835-100 system_loop(), entering wait for market to open')
+
+    wait_for_market_to_open()
+    if gbl_quit_flag == True or gbl_system_error_flag == True:
+        return
     
-
-    main_loop_seconds_count = 0
-
+    print(f'835-105 system_loop(), market is now open')
     
 
     app_key, secret_key, my_tokens_file = load_env_variables()
@@ -1338,6 +1397,8 @@ def system_loop():
     # create schwabdev client
     create_client_count = 0
 
+
+    main_loop_seconds_count = 0
     # while we try to create a schwabdev client
     while True:
         try:
@@ -1351,14 +1412,15 @@ def system_loop():
             continue
     # while we try to create a schwabdev client
 
+    print(f'835-110 system_loop(), schwabdev client created')
+
     print(f"schwabdev client created")
 
     
 
-
+    print(f'835-120 system_loop(), attemting to create mqtt client')
 
     # Create an MQTT client_tx
-
     try:
         # mqtt_client_tx = mqtt.Client()
         mqtt_client_tx = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
@@ -1369,8 +1431,11 @@ def system_loop():
     
     # print(f'mqtt_client_tx: {mqtt_client_tx}')
 
+    print(f'835-130 system_loop(), created mqtt client')
     print("MQTT client created")
 
+
+    print(f'835-140 system_loop(), attempting mqtt connection')
     # Connect to the MQTT broker
     try:
         # mqtt_connect_tx_return = mqtt_client_tx.connect(mqtt_broker_address, mqtt_broker_port)
@@ -1380,11 +1445,13 @@ def system_loop():
         print(f"mqtt_client_tx.connect(): An error occurred: {e}")
         return
     
+    print(f'835-150 system_loop(), mqtt connected')
     print("MQTT client connected")
 
 
     # print(f'returned from client_tx.connection, connect_return: {mqtt_connect_tx_return}')
 
+    print(f'835-160 system_loop(), creating threads')
 
     # Start the streamer_thread
     streamer_thread_obj = Thread(target=streamer_thread, args=(client,), name="streamer_thread", daemon=True)
@@ -1394,109 +1461,98 @@ def system_loop():
     message_processor_thread = Thread(target=message_processor, name="message_processor", daemon=True)
     message_processor_thread.start()
 
+    # Start the input monitoring thread
+    input_thread = threading.Thread(target=monitor_input, name="monitor_input", daemon=True)
+    input_thread.start()
 
 
-    # run once market is open
+    print(f'835-170 system_loop(), created threads')
+
+
+    init_check_spx_last()
+
+    main_loop_seconds_count = 0 
+    force_quit_count = 0 
+
+
+    print(f'835-180 system_loop(), entering main while loop')
+
+    # run while the market is open and while we have no system errors or quite signal
     while True:
 
-        gbl_system_error_flag = False
-
-    
-        wait_for_market_to_open()
-
-        init_check_spx_last()
-
- 
-        main_loop_seconds_count = 0 
-        force_quit_count = 0 
-        
-        
-        # supervision loop 
-        while True:
-
-            if gbl_quit_flag == True or gbl_system_error_flag == True:
+        # if we have a system error or quit flag
+        if gbl_quit_flag == True or gbl_system_error_flag == True:
                 
-                if gbl_quit_flag == True:
-                    temp_str = f"quit signal ('q' character) detected"
-                    print(temp_str)
-                    logging.info(temp_str)
-
-                if gbl_system_error_flag == True:
-                    temp_str = f'system error occurred'
-                    print(temp_str)
-                    logging.error(temp_str)
-
-                print(f'waiting for streamer_thread_obj to finish')
-                streamer_thread_obj.join()
-                print(f'streamer_thread_obj has finished')
-
-                print(f'waiting for message_processor_thread to finish')
-                message_processor_thread.join()
-                print(f'message_processor_thread has finished')
-
-                # graceful exit for mqtt client
-                temp_str = f'MQTT client shutdown'
+            if gbl_quit_flag == True:
+                temp_str = f"quit signal ('q' character) detected"
                 print(temp_str)
                 logging.info(temp_str)
-                mqtt_client_tx.disconnect()  # Disconnect from broker
-                mqtt_client_tx.loop_stop()  # Stop network loop
 
-                return
+            if gbl_system_error_flag == True:
+                temp_str = f'system error occurred'
+                print(temp_str)
+                logging.error(temp_str)
+
+            print(f'waiting for streamer_thread_obj to finish')
+            streamer_thread_obj.join()
+            print(f'streamer_thread_obj has finished')
+
+            print(f'waiting for message_processor_thread to finish')
+            message_processor_thread.join()
+            print(f'message_processor_thread has finished')
+
+            # graceful exit for mqtt client
+            temp_str = f'MQTT client shutdown'
+            print(temp_str)
+            logging.info(temp_str)
+            mqtt_client_tx.disconnect()  # Disconnect from broker
+            mqtt_client_tx.loop_stop()  # Stop network loop
+
+            return
+        
+        # if we have a system error or quit flag
 
             
-            #main loop wait
-            time.sleep(1.0)
-            main_loop_seconds_count += 1
+        #main loop wait
+        time.sleep(1.0)
+        
+        check_for_subscribe_update(client)
+        update_quote(client)
+
+        # occasionally check to see if the market is still open
+        main_loop_seconds_count += 1
+        if main_loop_seconds_count % 10 == 0:
+
+            if is_market_open() != True:
+                # break out of main trading session loop
+                temp_str = f'market has now closed, exiting system_loop()'
+                print(temp_str)
+                logging.info(temp_str)
+                return
+
+        else:
+            pass
 
 
-            check_for_subscribe_update(client)
-            update_quote(client)
+        # # force quit/error
+        # force_quit_count += 1
+        # if force_quit_count >= 13:
 
-            # occasionally check to see if the market is still open
-            if main_loop_seconds_count % 10 == 0:
+        #     # temp_str = f'forcing gbl_quit_flag True'
+        #     # logging.info(temp_str)
+        #     # print(temp_str)
+        #     # gbl_quit_flag = True
 
-                if is_market_open() != True:
-                    # break out of main trading session loop
-                    break
+        #     temp_str = f'forcing gbl_system_error_flag True'
+        #     logging.info(temp_str)
+        #     print(temp_str)
+        #     gbl_system_error_flag = True
 
-            else:
-                pass
-
-
-            # force quit/error
-            # force_quit_count += 1
-            # if force_quit_count >= 13:
-
-            #     # temp_str = f'forcing gbl_quit_flag True'
-            #     # logging.info(temp_str)
-            #     # print(temp_str)
-            #     # gbl_quit_flag = True
-
-            #     temp_str = f'forcing gbl_system_error_flag True'
-            #     logging.info(temp_str)
-            #     print(temp_str)
-            #     gbl_system_error_flag = True
-
-            # else:
-            #     print(f'force_count:{force_quit_count}')
+        # else:
+        #     print(f'force_count:{force_quit_count}')
 
 
-
-        if gbl_quit_flag:
-            # break out of trading session loop
-            break
-
-
-        # trading session loop
-
-    # run once market is open
-
-
-
-    print(f'exiting system_loop()')
-
-
-    time.sleep(0.25)
+    # run while the market is open and while we have no system errors or quite signal
 
 
 
