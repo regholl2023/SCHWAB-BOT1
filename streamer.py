@@ -127,7 +127,7 @@ def subscribe_to_options(passed_streamer_client):
         my_client.send(my_client.level_one_options(put_list, "0,1,2,3,4,5,6,7,8,10,28,29,30,31,32"))
     
     except Exception as e:
-        print(f"my_client.send for put_list: An error occurred: {e}")
+        print(f"100SEF my_client.send for put_list: An error occurred: {e}")
         gbl_system_error_flag = True
         return
 
@@ -142,7 +142,7 @@ def subscribe_to_options(passed_streamer_client):
         my_client.send(my_client.level_one_options(call_list, "0,1,2,3,4,5,6,7,8,10,28,29,30,31,32"))
 
     except Exception as e:
-        print(f"my_client.send for call_list: An error occurred: {e}")
+        print(f"102SEF my_client.send for call_list: An error occurred: {e}")
         gbl_system_error_flag = True
         return
 
@@ -172,15 +172,13 @@ def subscribe_to_options(passed_streamer_client):
     
 
 
-
-
 def streamer_thread(client):
     global gbl_quit_flag
     global gbl_system_error_flag
     global gbl_resubscribe_needed
     global gbl_market_open_flag
 
-    # print(f'in streamer_thread()')
+    print(f'streamer_thread() entry')
     
     while gbl_market_open_flag == False:
         # print(f'839 waiting for market open')
@@ -191,17 +189,19 @@ def streamer_thread(client):
 
     subscribe_to_schwab(client)
     if gbl_system_error_flag == True:
-        print(f'in streamer_thread() startup, gbl_system_error_flag == True')
+        print(f'in streamer_thread() startup, gbl_system_error_flag is True')
         return
 
 
     # create the streamer client
 
+    strm_client = None
+
     try:
         strm_client = client.stream
 
     except Exception as e:
-        print(f"strm_client = client.stream: An error occurred: {e}")
+        print(f"104SEF strm_client = client.stream: An error occurred: {e}")
         gbl_system_error_flag = True
         return
 
@@ -211,7 +211,7 @@ def streamer_thread(client):
         strm_client.start(my_handler)
 
     except Exception as e:
-        print(f"strm_client.start(): An error occurred: {e}")
+        print(f"106SEF strm_client.start(): An error occurred: {e}")
         gbl_system_error_flag = True
         return
 
@@ -222,7 +222,7 @@ def streamer_thread(client):
         strm_client.send(strm_client.level_one_equities("$SPX", "0,1,2,3,4,5,6,7,8"))
 
     except Exception as e:
-        print(f"strm_client.send(strm_client.level_one_equities($SPX): An error occurred: {e}")
+        print(f"108SEF strm_client.send(strm_client.level_one_equities($SPX): An error occurred: {e}")
         gbl_system_error_flag = True
         return
 
@@ -284,16 +284,12 @@ def streamer_thread(client):
     while True:
         time.sleep(1)
 
-        if gbl_quit_flag == True or gbl_system_error_flag == True:
-            print(f'streamer_thread detects quit signal')
+        abort_flag, abort_reason = any_abort_condition()
+
+        if abort_flag == True:
+            print(f'streamer_thread detects abort, reason: {abort_reason}')
             break
 
-        if gbl_system_error_flag == True:
-            print(f'gbl_system_error_flag == True')
-            break
-
-        if gbl_market_open_flag == False:
-            continue
 
         if gbl_resubscribe_needed == True:
 
@@ -303,12 +299,13 @@ def streamer_thread(client):
             subscribe_to_options(strm_client)
 
 
+    print(f'streamer_thread client.stream.stop()')
 
     try:
         client.stream.stop()
 
     except Exception as e:
-        print(f"client.stream.stop(): An error occurred: {e}")
+        print(f"110SEF client.stream.stop(): An error occurred: {e}")
         gbl_system_error_flag = True
 
 
@@ -606,12 +603,35 @@ def is_message_ADD(json_message):
         return False
 
 
+def any_abort_condition():
+
+    return_val = False
+    reason_str = ""
+
+    if gbl_quit_flag == True:
+        reason_str += f' quit flag detected'
+        return_val = True
+        
+    if gbl_system_error_flag == True:
+        reason_str += f'error flag detected'
+        return_val = True
+
+    if gbl_market_open_flag == False:
+        reason_str += f'market close detected'
+        return_val = True
+
+    return return_val, reason_str
+
+
+
 processor_msg_cnt = 0
 def message_processor():
     global gbl_quit_flag
     global gbl_system_error_flag
     global gbl_market_open_flag
     global processor_msg_cnt
+
+    print(f'message_processor() entry')
 
 
     while gbl_market_open_flag == False:
@@ -628,34 +648,31 @@ def message_processor():
 
 
     last_message = ""
+
     while True:
-        
 
-        if gbl_market_open_flag == False:
-            # print(f'930 waiting for market open')
-            time.sleep(1)
-            continue
+        abort_flag, abort_msg = any_abort_condition()
+
+        if abort_flag == True:
+            print(f'in message_processor() 1, aborting because {abort_msg}')
+            return
 
 
-        if gbl_quit_flag == True or gbl_system_error_flag == True:
-            print(f'exiting message_processor due to quit signal')
-            break
+        try:
+            last_message = message_queue.get(timeout=1)  # 1 second timeout
 
-        
-        # get the next messages from the schwab streaming message handlder
+        except queue.Empty: 
 
-        # Note: we need to be able to exit this thread in the event of 
-        # a sytem error. So we used a timeout to check for a system error.
-        while True:
-            try:
-                last_message = message_queue.get(timeout=1)  # 1 second timeout
-                break
+            # there was a timeout because of no message
+            # we check to see if there is any reason to abort the message processor thread
+            abort_flag, abort_msg = any_abort_condition()
 
-            except queue.Empty: 
-                # if no message has been received and there is a system error    
-                if gbl_system_error_flag == True:
-                    return
+            if abort_flag == True:
+                print(f'in message_processor() 2, aborting because {abort_msg}')
+                return
 
+
+        # if we fall throught to the point we have a message from the queue
 
         # ignore LOGIN and ADD messages
 
@@ -667,6 +684,8 @@ def message_processor():
             # print(f'got LOGIN message')
             continue
 
+
+        json_message = None
 
         try:
             json_message = json.loads(last_message)
@@ -716,8 +735,20 @@ def message_processor():
                 
 
         except json.JSONDecodeError as e:
-            print(f'284 Error decoding JSON: {e}')
 
+            # temp_str = f'284 message json.loads error, e type:{type(e)}, value:{e}'
+            # print(temp_str)
+
+            if json_message == None:
+                # we ignore json_message == None
+                pass
+
+            else:
+                temp_str = f'286 message json.loads error, e type:{type(e)}, value:{e}'
+                print(temp_str)
+                pass
+
+            
 
         time.sleep(0.001)
 
@@ -865,8 +896,11 @@ def is_market_open():
     current_time = datetime.now(eastern)
 
     # set markets daily start/end times
+
+
     start_time = current_time.replace(hour=9, minute=30, second=5, microsecond=0)
     end_time = current_time.replace(hour=15, minute=59, second=40, microsecond=0)
+
 
 
     eastern_time_str = current_time.strftime('%H:%M:%S')
@@ -942,9 +976,14 @@ def get_current_spx(client, milliseconds_since_epoch):
     low_fl = None
     close_fl = None
 
+    
+
 
     # Loop until we have a good response for SPX price history
     while True:
+
+        spx_history = None
+        retry_count = 0
 
         try:
             spx_history = client.price_history(
@@ -960,9 +999,24 @@ def get_current_spx(client, milliseconds_since_epoch):
                 ).json()
             
         except Exception as e:
-            print(f"spx_history = client.price_history: An error occurred: {e}")
+            print(f"112SEF spx_history = client.price_history: An error occurred: {e}")
+
+
+            if spx_history == None:
+                retry_count += 1
+                if retry_count > 4:
+                    temp_str = f"202SEF expired retries in get_current_spx()"
+                    print(temp_str)
+                    logging.error(temp_str)
+
+                    return None, None, None, None
+                
+                time.sleep(0.25)
+                print(f"113SEF retrying") 
+                continue
+
             gbl_system_error_flag = True
-            return
+            return None, None, None, None
         
         # print(f'spx_history raw type:{type(spx_history)}, data:\n{spx_history}')
         
@@ -978,7 +1032,7 @@ def get_current_spx(client, milliseconds_since_epoch):
             break
 
         except KeyError:
-            temp_str = f"Error while looking for SPX candle: 'candles' key not found in spx_history"
+            temp_str = f"114SEF Error while looking for SPX candle: 'candles' key not found in spx_history"
             print(temp_str)
             pretty_json = json.dumps(spx_history, indent=2)
             print(f'spx_history:\n{pretty_json}\n\n')
@@ -987,7 +1041,7 @@ def get_current_spx(client, milliseconds_since_epoch):
             return open_fl, high_fl, low_fl, close_fl
         
         except IndexError:
-            temp_str =f"Error while looking for SPX candle: 'candles' list is empty"
+            temp_str = f"116SEF Error while looking for SPX candle: 'candles' list is empty"
             print(temp_str)
             pretty_json = json.dumps(spx_history, indent=2)
             print(f'spx_history:\n{pretty_json}\n\n')
@@ -996,7 +1050,7 @@ def get_current_spx(client, milliseconds_since_epoch):
             return open_fl, high_fl, low_fl, close_fl
 
         except Exception as e:
-            temp_str = f'An unexpected error occurred while looking for SPX candle: {e}'
+            temp_str = f'118SEF An unexpected error occurred while looking for SPX candle: {e}'
             print(temp_str)
             pretty_json = json.dumps(spx_history, indent=2)
             print(f'spx_history:\n{pretty_json}\n\n')
@@ -1052,7 +1106,7 @@ def check_for_subscribe_update(client):
         open, high, low, close = get_current_spx(client, todays_epoch_time)
 
         if open == None or high == None or low == None or close == None:
-            temp_str = f"in check_for_subscribe_update() get_current_spx returned one or more 'None' value(s)"
+            temp_str = f"120SEF in check_for_subscribe_update() get_current_spx returned one or more 'None' value(s)"
             print(temp_str)
             logging.error(temp_str)
             gbl_system_error_flag = True
@@ -1096,11 +1150,11 @@ def build_strike_lists(client):
     spx_open, spx_high, spx_low, spx_close = get_current_spx(client, todays_epoch_time)
 
     if spx_open == None or spx_high == None or spx_low == None or spx_close == None:
-        temp_str = f"in build_strike_lists() get_current_spx returned one or more 'None' value(s)"
+        temp_str = f"122SEF in build_strike_lists() get_current_spx returned one or more 'None' value(s)"
         print(temp_str)
         logging.error(temp_str)
         gbl_system_error_flag = True
-        return
+        return None, None
 
 
 
@@ -1146,10 +1200,16 @@ def build_strike_lists(client):
 
     
 def subscribe_to_schwab(client):
-    pass
+
+
 
     # generate the list of put and call strikes to use
     put_strikes, call_strikes = build_strike_lists(client)
+
+    if put_strikes == None or call_strikes == None:
+        return
+    
+
     # print(f'AA put_strikes type:{type(put_strikes)}, data:\n{put_strikes}')
     # print(f'AA call_strikes type:{type(call_strikes)}, data:\n{call_strikes}')
 
@@ -1225,16 +1285,22 @@ def update_quote(client):
 
 
 
-
-            # put_quote = client.quote(put_opt_sym).json()
+            put_quote = None
 
             try:
                 put_quote = client.quote(put_opt_sym).json()
                 
             except Exception as e:
-                print(f"client.quote(put_opt_sym): An error occurred: {e}")
+                if put_quote == None:
+                    # return without flagging a system error
+                    # print(f'put_quote is None, returning wihtout flagging a system error')
+                    return
+                
                 gbl_system_error_flag = True
                 return
+            
+            # print(f'dbg client.quote 20: put_quote type:{type(put_quote)}, data:\n{put_quote}')
+
             
             publish_raw_queried_quote(put_quote)
 
@@ -1281,17 +1347,24 @@ def update_quote(client):
             # print(f'need to get and publish quote for call_opt_sym:{call_opt_sym}')
 
 
-
-
-            # call_quote = client.quote(call_opt_sym).json()
+            call_quote = None
 
             try:
                 call_quote = client.quote(call_opt_sym).json()
                 
             except Exception as e:
-                print(f"client.quote(call_opt_sym): An error occurred: {e}")
+                if call_quote == None:
+                    # return without flagging a system error
+                    # print(f'call_quote is None, returning wihtout flagging a system error')
+                    return
+
+
+                print(f'dbg client.quote 30: call_quote type:{type(call_quote)}, data:\n{call_quote}')
                 gbl_system_error_flag = True
                 return
+            
+            # print(f'dbg client.quote 40: call_quote type:{type(call_quote)}, data:\n{call_quote}')
+
             
             publish_raw_queried_quote(call_quote)
             
@@ -1331,12 +1404,14 @@ def update_quote(client):
 
 
 def mqtt_on_connect(client, userdata, flags, reason_code, properties=None):
+    global gbl_system_error_flag
 
     if reason_code == 0:
         print("MQTT client connected")
 
     else:
-        print(f"MQTT client Failed to connect, return code {reason_code}")
+        print(f"128SEF MQTT client Failed to connect, return code {reason_code}")
+        gbl_system_error_flag = True
 
 
 
@@ -1449,8 +1524,6 @@ def system_loop():
 
     init_check_spx_last()
 
-    main_loop_seconds_count = 0 
-    force_quit_count = 0 
 
 
     # print(f'835-180 system_loop(), entering main while loop')
@@ -1458,18 +1531,14 @@ def system_loop():
     # run while the market is open and while we have no system errors or quite signal
     while True:
 
-        # if we have a system error or quit flag
-        if gbl_quit_flag == True or gbl_system_error_flag == True:
-                
-            if gbl_quit_flag == True:
-                temp_str = f"quit signal ('q' character) detected"
-                print(temp_str)
-                logging.info(temp_str)
 
-            if gbl_system_error_flag == True:
-                temp_str = f'system error occurred'
-                print(temp_str)
-                logging.error(temp_str)
+        abort_flag, abort_reason = any_abort_condition()
+
+        # if we have a reason to abort
+        if abort_flag == True:
+            temp_str = f'In system_loop, abort detected becasue {abort_reason }'
+            print(temp_str)
+            logging.info(temp_str)
 
             print(f'waiting for streamer_thread_obj to finish')
             streamer_thread_obj.join()
@@ -1480,7 +1549,7 @@ def system_loop():
             print(f'message_processor_thread has finished')
 
             # graceful exit for mqtt client
-            temp_str = f'MQTT client shutdown'
+            temp_str = f'MQTT client disconnect and loop_stop'
             print(temp_str)
             logging.info(temp_str)
             mqtt_client_tx.disconnect()  # Disconnect from broker
@@ -1497,20 +1566,6 @@ def system_loop():
         check_for_subscribe_update(client)
         update_quote(client)
 
-        # occasionally check to see if the market is still open
-        main_loop_seconds_count += 1
-        if main_loop_seconds_count % 10 == 0:
-
-            if is_market_open() != True:
-                # break out of main trading session loop
-                temp_str = f'market has now closed, exiting system_loop()'
-                print(temp_str)
-                logging.info(temp_str)
-                return
-
-        else:
-            pass
-
 
         # # force quit/error
         # force_quit_count += 1
@@ -1521,7 +1576,7 @@ def system_loop():
         #     # print(temp_str)
         #     # gbl_quit_flag = True
 
-        #     temp_str = f'forcing gbl_system_error_flag True'
+        #     temp_str = f'130SEF forcing gbl_system_error_flag True'
         #     logging.info(temp_str)
         #     print(temp_str)
         #     gbl_system_error_flag = True
