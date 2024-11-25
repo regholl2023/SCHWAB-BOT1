@@ -195,6 +195,8 @@ def streamer_thread(client):
 
     # create the streamer client
 
+    strm_client = None
+
     try:
         strm_client = client.stream
 
@@ -974,9 +976,14 @@ def get_current_spx(client, milliseconds_since_epoch):
     low_fl = None
     close_fl = None
 
+    
+
 
     # Loop until we have a good response for SPX price history
     while True:
+
+        spx_history = None
+        retry_count = 0
 
         try:
             spx_history = client.price_history(
@@ -993,8 +1000,23 @@ def get_current_spx(client, milliseconds_since_epoch):
             
         except Exception as e:
             print(f"112SEF spx_history = client.price_history: An error occurred: {e}")
+
+
+            if spx_history == None:
+                retry_count += 1
+                if retry_count > 4:
+                    temp_str = f"202SEF expired retries in get_current_spx()"
+                    print(temp_str)
+                    logging.error(temp_str)
+
+                    return None, None, None, None
+                
+                time.sleep(0.25)
+                print(f"113SEF retrying") 
+                continue
+
             gbl_system_error_flag = True
-            return
+            return None, None, None, None
         
         # print(f'spx_history raw type:{type(spx_history)}, data:\n{spx_history}')
         
