@@ -284,6 +284,10 @@ def streamer_thread(client):
     while True:
         time.sleep(1)
 
+        # we abort if the market is no longer open
+        if is_market_open() == False:
+            gbl_market_open_flag = False
+
         abort_flag, abort_reason = any_abort_condition()
 
         if abort_flag == True:
@@ -563,6 +567,38 @@ def publish_levelone_options(data):
                 publish_quote(topic, item['Rho'])
     
 
+# determine whether this message is a heartbeat.  Return True/False along with 
+# the timestamp of the heartbeat.
+def is_heartbeat(json_message):
+
+    heartbeat_flag = False
+    heartbeat_time = None
+
+    if "notify" in json_message:
+        notify_list = json_message["notify"]
+        if isinstance(notify_list, list) and len(notify_list) > 0:
+            # print(f'notify is in json_message')
+            for entry in notify_list:
+                if "heartbeat" in entry:
+                    # print(f'heartbeat is in json_message')
+                    heartbeat_flag = True
+                    # Get the heartbeat value
+                    heartbeat_epoch = entry["heartbeat"]
+                    try:
+                        # Convert epoch string to integer and then to datetime
+                        heartbeat_time = datetime.fromtimestamp(int(heartbeat_epoch) / 1000)
+                        # heartbeat_str = heartbeat_time.strftime("%Y-%m-%d %H:%M:%S")
+                        # print(f"Heartbeat datetime: {heartbeat_str}")
+                    except ValueError as e:
+                        print(f"Error converting heartbeat: {e}")
+
+    return heartbeat_flag, heartbeat_time
+        
+
+
+
+
+
 # determine whether this message was confirmation for an "ADD" subscriptions.
 # returns True or False
 def is_message_ADD(json_message):
@@ -684,6 +720,14 @@ def message_processor():
             # print(f'got LOGIN message')
             continue
 
+        if "LOGOUT" in last_message:
+            # print(f'got LOGOUT message')
+            continue
+
+        if "heartbeat" in last_message:
+            # print(f'got heatbeat message')
+            continue
+
 
         json_message = None
 
@@ -719,19 +763,13 @@ def message_processor():
                 #         publish_levelone_options(item)
                 #         pass
 
-            # else the message was something other than a quote
+            # else the message was something other than a quote or one of the other messages trapped above
+
             else:
-
-                # "ADD" messages confirm subscriptions
-                if is_message_ADD(json_message):
-                    # print(f'received subscription ADD confirmation')
-                    pass
-
-                else:
-                    print(f'unsupported message')
-                    # pretty_json = json.dumps(json_message, indent=2)
-                    # print(f'unsupported message:\n{pretty_json}')
-                    pass
+                print(f'unsupported message')
+                pretty_json = json.dumps(json_message, indent=2)
+                print(f'unsupported message:\n{pretty_json}')
+                pass
                 
 
         except json.JSONDecodeError as e:
@@ -895,21 +933,28 @@ def is_market_open():
     # Get the current time in Eastern Time
     current_time = datetime.now(eastern)
 
+    
+
     # set markets daily start/end times
 
+    # FIX ME
+    # start_time = current_time.replace(hour=9, minute=30, second=5, microsecond=0)
+    # end_time = current_time.replace(hour=15, minute=59, second=40, microsecond=0)
+    start_time = current_time.replace(hour=18, minute=11, second=40, microsecond=0)
+    end_time = current_time.replace(hour=18, minute=12, second=30, microsecond=0)
 
-    start_time = current_time.replace(hour=9, minute=30, second=5, microsecond=0)
-    end_time = current_time.replace(hour=15, minute=59, second=40, microsecond=0)
 
 
-
-    eastern_time_str = current_time.strftime('%H:%M:%S')
-        
+    # eastern_time_str = current_time.strftime('%H:%M:%S')
+    # end_time_str = end_time.strftime('%H:%M:%S')
+ 
 
     if weekday_flag == False or current_time < start_time or current_time > end_time:
         # print(f'Market is not open.  Current day of week: {weekday_name}.  Current eastern time: {eastern_time_str}')
         gbl_market_open_flag = False
         return False
+    
+    # print(f'Market IS open.  Current day of week: {weekday_name}.  Current eastern time: {eastern_time_str}')
     
 
     gbl_market_open_flag = True
