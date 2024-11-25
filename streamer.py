@@ -937,13 +937,8 @@ def is_market_open():
 
     # set markets daily start/end times
 
-    # FIX ME
-    # start_time = current_time.replace(hour=9, minute=30, second=5, microsecond=0)
-    # end_time = current_time.replace(hour=15, minute=59, second=40, microsecond=0)
-    start_time = current_time.replace(hour=18, minute=11, second=40, microsecond=0)
-    end_time = current_time.replace(hour=18, minute=12, second=30, microsecond=0)
-
-
+    start_time = current_time.replace(hour=9, minute=30, second=10, microsecond=0)
+    end_time = current_time.replace(hour=15, minute=59, second=50, microsecond=0)
 
     # eastern_time_str = current_time.strftime('%H:%M:%S')
     # end_time_str = end_time.strftime('%H:%M:%S')
