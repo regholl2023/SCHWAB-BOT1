@@ -1269,7 +1269,7 @@ def update_quote(client):
                 put_quote = client.quote(put_opt_sym).json()
                 
             except Exception as e:
-                if call_quote == None:
+                if put_quote == None:
                     # return without flagging a system error
                     # print(f'put_quote is None, returning wihtout flagging a system error')
                     return
