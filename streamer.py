@@ -936,9 +936,9 @@ def is_market_open():
     
 
     # set markets daily start/end times
-
     start_time = current_time.replace(hour=9, minute=30, second=10, microsecond=0)
     end_time = current_time.replace(hour=15, minute=59, second=50, microsecond=0)
+
 
     # eastern_time_str = current_time.strftime('%H:%M:%S')
     # end_time_str = end_time.strftime('%H:%M:%S')
@@ -1010,20 +1010,31 @@ def get_today_in_epoch():
 
 def get_current_spx(client, milliseconds_since_epoch):
     global gbl_system_error_flag
+    global gbl_market_open_flag
 
     open_fl = None
     high_fl = None
     low_fl = None
     close_fl = None
 
+    retry_count = 0
+    MAX_RETRIES = 5
+    spx_history = None
     
 
 
     # Loop until we have a good response for SPX price history
     while True:
 
-        spx_history = None
-        retry_count = 0
+        if is_market_open() != True:
+            print(f'in get_current_spx(), market is not open')
+            gbl_market_open_flag = False
+            return None, None, None, None
+        
+        if gbl_system_error_flag == True:
+            return None, None, None, None
+        
+
 
         try:
             spx_history = client.price_history(
@@ -1044,19 +1055,22 @@ def get_current_spx(client, milliseconds_since_epoch):
 
             if spx_history == None:
                 retry_count += 1
-                if retry_count > 4:
+                if retry_count > MAX_RETRIES:
                     temp_str = f"202SEF expired retries in get_current_spx()"
                     print(temp_str)
                     logging.error(temp_str)
 
+                    gbl_system_error_flag = True
                     return None, None, None, None
                 
                 time.sleep(0.25)
                 print(f"113SEF retrying") 
+
                 continue
 
+
             gbl_system_error_flag = True
-            return None, None, None, None
+            continue
         
         # print(f'spx_history raw type:{type(spx_history)}, data:\n{spx_history}')
         
