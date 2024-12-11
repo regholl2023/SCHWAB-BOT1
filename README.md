@@ -35,3 +35,11 @@ As SPX reaches new daily highs or lows, that range of strike quotes automaticall
 As streaming quotes are received from Schwab, they are re-published through the localhost mqtt broker using this mqtt topic: <br>
 ___schwab/stream___ <br>
 with the quote data as payload
+
+# Individual apps
+- streamer.py: subscribe to streaming SPX and selected SPX option quotes via schwab api.  Publish via mqtt on local host. Periodically query the same SPX option prices to ensure that we have current and accurate prices.
+- grid.py: subscribe to mqtt localhost for SPX and SPX option data.  Maintain an SPX option grid. Publish the grid upon request
+
+# Other files
+- recommender.py: given an SPX option grid, recommend call and put vertical spreads.
+- VERSION: schwab-streamer version
