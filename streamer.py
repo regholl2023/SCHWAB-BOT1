@@ -982,7 +982,7 @@ def wait_for_market_to_open():
         
         throttle_time_display += 1
         if throttle_time_display >= ITERATIONS_BETWEEN_DISPLAY:
-            print(f'Market is not open. Current: {get_eastern_weekday_time()}')
+            print(f'streamer: Market is not open. Current: {get_eastern_weekday_time()}')
             throttle_time_display = 0
         
         
