@@ -10,7 +10,8 @@ from datetime import datetime, timezone, timedelta
 import warnings
 import json
 import pytz
-import spread_picker_B
+# import spread_picker_B
+import recommender
 from tabulate import tabulate
 import calendar
 import pytz
@@ -235,7 +236,7 @@ def process_message():
                 call_long,
                 put_short,
                 put_long,
-                spx_price) = spread_picker_B.generate_recommendation(payload_dict)
+                spx_price) = recommender.generate_recommendation(payload_dict)
             
             call_spread = spread_data(call_short, call_long, spx_price)
             put_spread = spread_data(put_short, put_long, spx_price)
