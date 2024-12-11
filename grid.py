@@ -760,7 +760,7 @@ def main():
             current_time = datetime.now(eastern)
             eastern_time_str = current_time.strftime('%H:%M:%S')
 
-            print(f'waiting for market to open, current East time: {eastern_time_str}')
+            print(f'grid: Waiting for market to open, current East time: {eastern_time_str}')
 
             pass
 
