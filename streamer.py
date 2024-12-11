@@ -968,7 +968,7 @@ def wait_for_market_to_open():
     ITERATIONS_BETWEEN_DISPLAY = int(60 / SECONDS_BETWEEN_CHECKS)
 
 
-    # loop until market is open
+    # loop until market is open 
     market_wait_cnt = 0
     throttle_time_display = ITERATIONS_BETWEEN_DISPLAY
     while True:
