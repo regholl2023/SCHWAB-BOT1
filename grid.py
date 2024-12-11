@@ -10,7 +10,6 @@ from datetime import datetime, timezone, timedelta
 import warnings
 import json
 import pytz
-import spread_picker_B
 from tabulate import tabulate
 import calendar
 import pytz
