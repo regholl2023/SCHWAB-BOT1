@@ -46,7 +46,7 @@ def on_message(client, userdata, msg):
 
 
 # File paths to store the historical data in the specified directory
-PICKLE_DIR = r"C:\MEIC\pickle"
+PICKLE_DIR = r"C:\MEIC\gamma_track"
 SPXW_GAMMA_VALUES_FILE = os.path.join(PICKLE_DIR, 'spxw_gamma_values.pkl')
 SPX_LAST_PRICES_FILE = os.path.join(PICKLE_DIR, 'spx_last_prices.pkl')
 SPXW_CSV_FILE_PATH = os.path.join(PICKLE_DIR, 'spxw_gamma.csv')

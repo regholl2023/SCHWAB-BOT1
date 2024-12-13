@@ -10,16 +10,13 @@ from datetime import datetime, timezone, timedelta
 import warnings
 import json
 import pytz
+# import spread_picker_B
+import recommender
 from tabulate import tabulate
 import calendar
 import pytz
 
 quote_df_lock = threading.Lock()
-
-global mqtt_client
-
-global gbl_total_message_count
-gbl_total_message_count = 0
 
 
 
@@ -82,16 +79,12 @@ else:
     SPX_SCHWAB_STREAM = ""
     SPX_SCHWAB_QUERIED = ""   
 
-
-GRID_REQUEST_TOPIC = "schwab/spx/grid/request/#"
-GRID_RESPONSE_TOPIC = "schwab/spx/grid/response/"
-
 # Callback function when the client connects to the broker
 def on_connect(client, userdata, flags, rc):
 
     if rc == 0:
-        print("Connected to MQTT broker successfully.")
         if mqtt_mode == MQTT_MODE_TOPICS:
+            print("Connected to MQTT broker successfully.")
             client.subscribe(SPX_LAST_TOPIC)
             print(f"Subscribed to topic: {SPX_LAST_TOPIC}")
             client.subscribe(SPX_OPT_BID_ASK_LAST_TOPIC)
@@ -103,10 +96,6 @@ def on_connect(client, userdata, flags, rc):
             client.subscribe(SPX_SCHWAB_QUERIED)
             print(f"Subscribed to topic: {SPX_SCHWAB_QUERIED}")
 
-        client.subscribe(GRID_REQUEST_TOPIC)
-        print(f"Subscribed to topic: {GRID_REQUEST_TOPIC}")
-
-
 
     else:
         print(f"Failed to connect with error code: {rc}")
@@ -116,15 +105,9 @@ def on_message(client, userdata, msg):
     topic = msg.topic
     payload = msg.payload.decode()
 
-    # print(f'Received topic type:{type(topic)}, topic:<{topic}>')
-    # print(f'payload type:{type(payload)},\ndata:<{payload}>')
-
-    # try:
-    #     payload_dict = json.loads(payload)
-    #     print(f"01 Received message on topic:<{topic}> payload:\n{json.dumps(payload_dict, indent=2)}")
-    # except Exception as e:
-    #     print(f"grid manager on_message() An error occurred: {e} while trying to convert payload to json")
-
+    # print(f"Received topic type:{type(topic)}, payload type:{type(payload)}")
+    payload_dict = json.loads(payload)
+    # print(f"01 Received message on topic:<{topic}> payload:\n{json.dumps(payload_dict, indent=2)}")
 
     # Put the topic and payload into the queue as a tuple
     message_queue.put((topic, payload))
@@ -239,7 +222,6 @@ def add_to_quote_tbl2(sym,bid,ask,last):
     if bid == None and ask == None and last == None:
         print(f'{sym} has all None values')
         return
-    
 
     # Get the current time
     current_time = datetime.now()
@@ -278,11 +260,9 @@ def add_to_quote_tbl2(sym,bid,ask,last):
             if bid != None:
                 quote_df.at[row_index, 'bid'] = bid
                 quote_df.at[row_index, 'bid_time'] = time_str
-
             if ask != None:
                 quote_df.at[row_index, 'ask'] = ask
                 quote_df.at[row_index, 'ask_time'] = time_str
-
             if last != None:
                 quote_df.at[row_index, 'last'] = last
                 quote_df.at[row_index, 'last_time'] = time_str
@@ -363,7 +343,6 @@ def process_stream(topic, payload_dict):
                                 if equitity_key == "$SPX":
                                     spx_last_fl = float(content['last'])
                                     # print(f'found $SPX in equitity_key:{equitity_key}, value:{spx_last_fl}')
-                                    
                                     add_to_quote_tbl2(equitity_key, spx_bid_fl, spx_ask_fl, spx_last_fl)
 
                             
@@ -409,18 +388,9 @@ def process_stream(topic, payload_dict):
                                     pass
 
                                 else:
-
-                                    # print(f'opt_bid type:{type(opt_bid)}, value:{opt_bid}')
-                                    # print(f'opt_ask type:{type(opt_ask)}, value:{opt_ask}')
-
-                                    # if opt_ask == 0.05:
-                                    #     print(f'opt_ask is 0.05, opt_bid:{opt_bid}')
-
-
                                     # print(f'streamed adding_to_quote_tbl2 {opt_sym}, bid:{opt_bid}, ask:{opt_ask}, last:{opt_last}')
                                     add_to_quote_tbl2(opt_sym, opt_bid, opt_ask, opt_last)
-
-                             
+                                
 
 def process_queried(topic, payload_dict):
     global spx_last_fl
@@ -452,7 +422,7 @@ def process_queried(topic, payload_dict):
             # Check and print quote[askPrice]
             if "quote" in value and "askPrice" in value["quote"]:
                 # print(f" queried Ask Price: {value['quote']['askPrice']}")
-                opt_ask = float(value['quote']['askPrice'])
+                opt_ask = float(value['quote']['bidPrice'])
 
             # print(f'queried adding_to_quote_tbl2 {opt_sym}, bid:{opt_bid}, ask:{opt_ask}, last:{opt_last}')
             add_to_quote_tbl2(opt_sym, opt_bid, opt_ask, opt_last)
@@ -463,58 +433,22 @@ def process_queried(topic, payload_dict):
 # Thread function to process messages from the queue
 def process_message():
     global spx_last_fl
-    global gbl_total_message_count
 
     while True:
         # Get the (topic, message) tuple from the queue
         topic, payload = message_queue.get()
 
-        gbl_total_message_count += 1
 
-
-        # payload_dict = json.loads(payload)
+        payload_dict = json.loads(payload)
         # print(f"02 Received message on topic:<{topic}> payload:\n{json.dumps(payload_dict, indent=2)}")
-
-        # payload may be empty or may not be json data
-        try:
-            # Attempt to parse the JSON data
-            payload_dict = json.loads(payload)
-
-        except json.JSONDecodeError:
-            # print("Payload is not valid JSON")
-            payload_dict = {}
-
-        except Exception as e:
-            print(f"8394 An error occurred: {e} while trying load json data")
-            payload_dict = {}
-  
-
 
         if "schwab/stream" in topic:
             process_stream(topic, payload_dict)
 
-        elif "schwab/queried" in topic:
+        if "schwab/queried" in topic:
             process_queried(topic, payload_dict)
 
-        elif "schwab/spx/grid/request" in topic:
-            print(f'grid request topic type:{type(topic)}, topic:<{topic}>')
-            # Parse the topic to extract the last level
-            request_id = topic.split('/')[-1]
 
-            # Print the result to confirm
-            # print(f'request_id:<{request_id}>')
-
-
-            with quote_df_lock: 
-                quote_df_sorted = quote_df.sort_values(by='symbol')
-
-    
-            # Count the number of rows with NaN or None values in 'bid' or 'ask'
-            rows_with_nan_bid_ask = quote_df_sorted[['bid', 'ask']].isna().any(axis=1).sum()
-
-            publish_grid(quote_df_sorted, rows_with_nan_bid_ask, request_id)
-
-            pass
 
 
 
@@ -536,42 +470,323 @@ def process_message():
         time.sleep(0.1)
 
 
-# Function to publish grid via MQTT
-def publish_grid(quote_df_sorted, rows_with_nan_bid_ask, request_id):
-    global mqtt_client
-
-
-    my_topic = GRID_RESPONSE_TOPIC + request_id
-
-    # print(f'in publish_grid, rows_with_nan_bid_ask:{rows_with_nan_bid_ask}')
-    print(f'grid manager publishing topic:<{my_topic}>')
-
-    # Force publishing of an empty json list
-    # rows_with_nan_bid_ask = 1
-
-    if rows_with_nan_bid_ask > 0:
-        json_data = json.dumps([])
-
-    else:
-        json_data = quote_df_sorted.to_json(orient='records')
-
-    mqtt_client.publish(my_topic, json_data)
-
-    # # Load JSON string into a Python dictionary for pretty printing
-    # parsed_json = json.loads(json_data)
-    # print(f'grid data:\n{json.dumps(parsed_json, indent=4)}')
 
 
 
+def persist_string(string_data):
+    # Define the directory and ensure it exists
+    directory = r"C:\MEIC\chain_data"
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    
+    # Generate the filename with current date and time in yymmddhhmmss format
+    current_datetime = datetime.now().strftime("%y%m%d")
+    filename = f"recommendations_{current_datetime}.txt"
+    file_path = os.path.join(directory, filename)
+
+    # Ensure the directory exists
+    os.makedirs(directory, exist_ok=True)
+    
+    # Open the file in append mode, creating it if it doesn't exist, and append the string data
+    with open(file_path, 'a') as file:
+        file.write(string_data + '\n')
+
+
+
+def persist_list(list_data):
+
+    # print(f'in persist_list, list_data:\n{list_data}')
+
+    # Define the directory and ensure it exists
+    directory = r"C:\MEIC\chain_data"
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    
+    # Generate the filename with current date and time in yymmddhhmmss format
+    current_datetime = datetime.now().strftime("%y%m%d")
+    filename = f"recommendations_{current_datetime}.txt"
+    file_path = os.path.join(directory, filename)
+
+    try:
+    
+        with open(file_path, "a") as file:
+            # json.dump(list_data, file, indent=4)  # Indent for human-readable formatting
+
+            for item in list_data:
+                # Check if the required keys are present
+
+                if 'symbol' in item and 'bid' in item and 'ask' in item:
+
+                    bid_fl = float(item['bid'])
+                    bid_str = f"{bid_fl:.2f}"
+                    ask_fl = float(item['ask'])
+                    ask_str = f"{ask_fl:.2f}"
+                    last_fl = None
+                    last_str = "None"
+
+                    # if bid is 0 we are not interested in preserving the data
+                    if bid_fl == 0.0 or bid_fl >= 10:
+                        continue
+                    
+
+                    # Format the string
+                    formatted_string = f"symbol:{item['symbol']}, bid:{bid_str}, ask:{ask_str}"
+                    if 'last' in item:
+                        last_fl = float(item['last'])
+                        last_str = f"{last_fl:.2f}"
+                        formatted_string += f", last:{last_str}"
+
+                    if "SPXW24" in formatted_string:
+
+
+                        # FIX ME
+
+                        # Strip characters 8th through 17th, 19th, and 24th through 26th
+                        revised_string = (
+                            formatted_string[:7] +  # Keep everything up to the 7th character
+                            formatted_string[17:18] +  # Keep the 18th character
+                            formatted_string[19:23] +  # Keep characters 20th through 23rd
+                            formatted_string[26:]  # Keep everything from the 27th character onwards
+                        )
+
+                        print("Original string:", formatted_string)
+                        print("Revised string:", revised_string)
+                        formatted_string = revised_string
+
+
+
+                    file.write(formatted_string + '\n')
+
+    except Exception as e:
+        print(f"Error persist_list(): {e}")
 
 
 
 
+# def display_picker_list(label_str, picked_list, persist_flag):
 
+#     print(f'in display_picker_list(), label_str:{label_str}, persist_flag:{persist_flag}')
+#     print(f'picked_list type:{type(picked_list)}, data:\n{picked_list}')
+    
+#     print(label_str)
+#     if persist_flag == True:
+#         persist_string(label_str)
+
+
+ 
+
+#     # Extract headers
+#     headers = picked_list[0]
+
+
+#     for row in picked_list[1:]:
+
+#         print(f'\nin display_picker_list, row type:{type(row)}, data:\n{row}\n')
+
+#         formatted_row = {}
+#         for header, value in zip(headers, row):
+#             try:
+#                 if header == "Short Strike":
+#                     my_short_strike = int(value)
+#                     formatted_row[header] = my_short_strike
+#                     print(f"Short Strike: {my_short_strike}")
+#                 elif header == "Long Strike":
+#                     my_long_strike = int(value)
+#                     formatted_row[header] = my_long_strike
+#                     print(f"Long Strike: {my_long_strike}")
+#                 elif header == "Net Credit":
+#                     my_net_credit = float(value)
+#                     formatted_row[header] = my_net_credit
+#                     print(f"Net Credit: {my_net_credit:.2f}")
+#                 elif header == "Short Bid":
+#                     my_short_bid = float(value)
+#                     formatted_row[header] = my_short_bid
+#                     print(f"Short Bid: {my_short_bid:.2f}")
+#                 elif header == "Long Ask":
+#                     my_long_ask = float(value)
+#                     formatted_row[header] = my_long_ask
+#                     print(f"Long Ask: {my_long_ask:.2f}")
+#                 elif header == "SPX Offset":
+#                     my_spx_offset = float(value)
+#                     formatted_row[header] = my_spx_offset
+#                     print(f"SPX Offset: {my_spx_offset:.2f}")
+#                 elif header == "Spread Width":
+#                     my_spread_width = float(value)
+#                     formatted_row[header] = my_spread_width
+#                     print(f"Spread Width: {my_spread_width:.2f}")
+#                 else:
+#                     formatted_row[header] = value
+#             except ValueError as e:
+#                 print(f"Error processing {header} with value {value}: {e}")
+
+
+#         display_str = (
+#             f"spread:{my_short_strike}/{my_long_strike} "
+#             f"   net:{my_net_credit:.2f} "
+#             f"   width:{my_spread_width:.0f} "
+#             f"   OTM offset:{my_spx_offset:.2f}"
+#             f"   premiums:{my_short_bid:.2f}/{my_long_ask:.2f} "
+#             )
+        
+#         print(f'display_picker_list display_string:<{display_str}')
+        
+#         print(display_str)
+
+#         if persist_flag == True:
+#             persist_string(display_str)
+        
+
+
+def spread_data(short_opt, long_opt, spx_price):
+
+
+    try:
+
+        if len(long_opt) < 1 or len(short_opt) < 1:
+            return {}
+
+
+        # Extract data from the single-item lists
+        short_opt = short_opt[0]
+        long_opt = long_opt[0]
+
+        # Retrieve necessary values
+        short_symbol = short_opt['symbol']
+        short_strike = short_opt['STRIKE']
+        long_symbol = long_opt['symbol']
+        long_strike = long_opt['STRIKE']
+        short_bid = short_opt['bid']
+        long_ask = long_opt['ask']
+
+        # Calculate required values
+        net = abs(short_opt['bid'] - long_opt['ask'])
+        width = abs(short_strike - long_strike)
+        otm_offset = abs(spx_price - short_strike)
+
+        # Create the spread list with the required keys
+        spread = {
+            'short_symbol': short_symbol,
+            'short_strike': short_strike,
+            'long_symbol': long_symbol,
+            'long_strike': long_strike,
+            'net': net,
+            'width': width,
+            'otm_offset': otm_offset,
+            'short_bid' : short_bid,
+            'long_ask' : long_ask
+        }
+
+
+        return spread
+
+    except KeyError as e:
+        print(f"Missing key: {e}. Ensure 'short_opt' and 'long_opt' have 'symbol', 'bid', 'ask', and 'STRIKE' keys.")
+    except Exception as e:
+        current_time = datetime.now()
+        time_str = current_time.strftime('%H:%M:%S')
+        print(f"1325  An error occurred: {e} at {time_str}")
+        print(f"short_opt:{short_opt}")
+        print(f"long_opt:{long_opt}")
+        print(f'size of short_opt:{len(short_opt)}, size of long_opt:{len(long_opt)}')
+
+    return {}  # Return an empty spread in case of an exception   
+
+
+
+def display_spread(label_str, spread_list):
+
+    # print(f'spread_list type:{type(spread_list)}, data:{spread_list}')
+
+    if 'net' not in spread_list:
+        disp_str = f'No net. No recommendation.'
+        print(disp_str)
+        persist_string(disp_str)
+        return
+
+
+    # print(f'in display_spread, spread_list type:{type(spread_list)}, data:\n{spread_list}')
+
+    
+    # Format the output according to the provided structure
+    try:
+        # Save values in float variables
+        # Convert float variables to string with two decimal places
+        net_fl = float(spread_list['net'])
+        net_str = f"{net_fl:.2f}"
+
+        otm_offset_fl = float(spread_list['otm_offset'])
+        otm_offset_str = f"{otm_offset_fl:.2f}"
+
+        short_bid_fl = float(spread_list['short_bid'])
+        short_bid_str = f"{short_bid_fl:.2f}"
+
+        long_ask_fl = float(spread_list['long_ask'])
+        long_ask_str = f"{long_ask_fl:.2f}"
+
+
+        output = (
+            f"{spread_list['short_strike']}/{spread_list['long_strike']}  "
+            f"net: {net_str}  "
+            f"width: {spread_list['width']}  "
+            f"otm offset: {otm_offset_str}  "  # Format to 2 decimal places "
+            f"premiums: {short_bid_str}/{long_ask_str}"
+        )
+        # print(output)
+    except KeyError as e:
+        current_time = datetime.now()
+        time_str = current_time.strftime('%H:%M:%S')
+        print(f"1476 Missing key: {e} at {time_str}. Ensure all required keys are present in spread_list.")
+        print(f"spread_list: {spread_list}")
+        
+        return
+    except Exception as e:
+        print(f"1225 An error occurred: {e}")
+        print(f'size of spread_list:{len(spread_list)}')
+        return
+    
+    disp_str = f'{label_str} {output}'
+    print(disp_str)
+    persist_string(disp_str)
+    
+    
+
+def display_syms(short_opt, long_opt):
+
+    # print(f'in display_syms, short_opt type{type(short_opt)}, data:\n{short_opt}')
+    # print(f'in display_syms, long_opt type{type(long_opt)}, data:\n{long_opt}')
+
+    short_sym = ""
+    long_sym = ""
+
+    
+    # Format the output according to the provided structure
+    try:
+
+
+        # Save symbols into string variables
+        short_sym = short_opt[0]['symbol']
+        long_sym = long_opt[0]['symbol']
+        output = f'{short_sym}/{long_sym}'
+
+ 
+    except KeyError as e:
+        print(f"Missing key: {e}. Ensure all required keys are present in the short and long option lists.")
+        return
+    except Exception as e:
+        print(f"1225 An error occurred: {e} while trying to get symbols for short/long options")
+        return
+    
+
+    disp_str = f'symbols: {output}'
+    print(disp_str)
+    persist_string(disp_str)
+
+
+         
+     
 
 def meic_entry(schwab_client):
     global quote_df
-    no_none_nan_flag = False    # indicates when all bid and ask have values
 
     display_quote_throttle = 0
 
@@ -605,28 +820,12 @@ def meic_entry(schwab_client):
         current_time = datetime.now()
         time_str = current_time.strftime('%H:%M')
 
-        # periodically Print the sorted DataFrame with the selected columns
-        if display_quote_throttle % 10 == 8:
-
-            if rows_with_nan_bid_ask > 0:
-                print(f'# rows:{total_rows}, # Nan/None in bid/ask:{rows_with_nan_bid_ask}, # messages:{gbl_total_message_count}')
-                no_none_nan_flag = False
-
-            else:
-                if no_none_nan_flag == False:
-                    print(f'All bid and ask now have quoted values')
-                    no_none_nan_flag = True
-
-
-
-            # print(f'\n{time_str}  SPX:{spx_last_fl}, grid:\n{quote_df_sorted[columns_to_print]}')
-
-
-            # print(f'Total number of rows: {total_rows}, message count: {gbl_total_message_count}')
-            # print(f'Number of rows with NaN or None in bid or ask: {rows_with_nan_bid_ask}')
-            # print(f'# rows:{total_rows}, # Nan/None in bid/ask:{rows_with_nan_bid_ask}, # messages:{gbl_total_message_count}')
-            # publish_grid(quote_df_sorted, rows_with_nan_bid_ask, "dummy_req_id")
-            pass
+        # # periodically Print the sorted DataFrame with the selected columns
+        # if display_quote_throttle % 20 == 15:
+        #     # print(f'\n{time_str}  SPX:{spx_last_fl}, quote_df sorted:\n{quote_df_sorted[columns_to_print]}')
+        #     print(f'Total number of rows: {total_rows}')
+        #     print(f'Number of rows with NaN or None in bid or ask: {rows_with_nan_bid_ask}')
+        #     pass
 
 
         # periodically save the sorted dataframe to a .json file
@@ -666,26 +865,115 @@ def meic_entry(schwab_client):
 
         if display_quote_throttle % quote_interval_modulo == quote_interval_remainder:
 
-            pass
+            # but only if we have a minimum number of rows
+            # and very few rows with None/Nan value for bid and ask
+
+            # Total number of rows
+            total_rows = len(quote_df)
+
+            # Count the number of rows with NaN or None values in 'bid' or 'ask'
+            rows_with_nan_bid_ask = quote_df[['bid', 'ask']].isna().any(axis=1).sum()
 
 
-            # # Total number of rows
-            # total_rows = len(quote_df)
+            ROW_NEEDED = 50
+            MAX_NAN = 2
 
-            # # Count the number of rows with NaN or None values in 'bid' or 'ask'
-            # rows_with_nan_bid_ask = quote_df[['bid', 'ask']].isna().any(axis=1).sum()
 
-            # ROW_NEEDED = 50
-            # MAX_NAN = 2
+            if total_rows >= ROW_NEEDED and rows_with_nan_bid_ask <= MAX_NAN:
+                quote_json = quote_df_sorted.to_dict(orient="records")
+                pretty_json = json.dumps(quote_json, indent=4)
+                # print(f'pretty_json:\n{pretty_json}')
+                # current_datetime = datetime.now().strftime("%y%mdd%H%M%S")
+                current_datetime = datetime.now().strftime("%y%m%d%H%M%S")
+                # print(f'current_datetime:{current_datetime}')
+                directory = r"C:\MEIC\chain_data"
+                filename = f"quote_{current_datetime}.json"
+                file_path = os.path.join(directory, filename)
+                
 
-            # if total_rows >= ROW_NEEDED and rows_with_nan_bid_ask <= MAX_NAN:
-            #     quote_json = quote_df_sorted.to_dict(orient="records")
+                # Ensure the directory exists
+                os.makedirs(directory, exist_ok=True)
+                
 
-            
-            # else:
-            #     pass
-            #     # print(f'waiting for enough rows ({ROW_NEEDED}), current:{total_rows}')
-            #     # print(f'and/or fewer than {MAX_NAN} None/Nan in bid/ask, current {rows_with_nan_bid_ask}')
+                # Save the JSON data to the file with indentation for readability
+                with open(file_path, "w") as file:
+                    json.dump(quote_json, file, indent=4)  # Indent for human-readable formatting
+
+                print(f'saved chain data to {file_path}')
+
+                # print(f'quote_json type:{type(quote_json)}, data:\n{quote_json}')
+                persist_string(f'\n{file_path}:')
+                persist_list(quote_json)
+
+                # Save the JSON data to the file with indentation for readability
+                with open(file_path, "w") as file:
+                    json.dump(quote_json, file, indent=4)  # Indent for human-readable formatting(quote_json)
+
+
+                #convert quote_df_sorted to a dictionary 
+                quote_sorted_json = quote_df_sorted.to_dict(orient="records")
+                # print(f'\n225 quote_sorted_json type{type(quote_sorted_json)}, data:\n{quote_sorted_json}\n\n')
+
+                # pretty_json = json.dumps(quote_sorted_json, indent=4)
+                # print(f'226 pretty_json type{type(quote_sorted_json)}, data:\n{pretty_json}')
+
+                # # print(f'calling generate_recommendation()')
+                # (call_candidates, 
+                # call_recommendation, 
+                # put_candidates, 
+                # put_recommendation, spx_price_picker) = spread_picker_B.generate_recommendation(quote_sorted_json)
+
+                # print(f'call_candidates type:{type(call_candidates)}, data\n{call_candidates}')
+                # print(f'call_recommendation type:{type(call_recommendation)}, data:\n{call_recommendation}')
+                # print(f'put_candidates type:{type(put_candidates)}, data:\n{put_candidates}')
+                # print(f'put_recommendation type:{type(put_recommendation)}, data:\n{put_recommendation}')
+
+
+                (call_short,
+                    call_long,
+                    put_short,
+                    put_long,
+                    spx_price_picker) = recommender.generate_recommendation(quote_sorted_json)
+                
+                # print(f'call_short type:{type(call_short)}, data\n{call_short}')
+                # print(f'call_long type:{type(call_long)}, data\n{call_long}')
+                # print(f'put_short type:{type(put_short)}, data\n{put_short}')
+                # print(f'put_long type:{type(put_long)}, data\n{put_long}')
+
+                cs_len = len(call_short)
+                cl_len = len(call_long)
+                ps_len = len(put_short)
+                pl_len = len(put_long)
+
+                if cs_len == 0 or cl_len == 0 or ps_len == 0 or pl_len == 0:
+                    print(f'at least one of the spread options could not be recommended')
+                    if cs_len == 0:
+                        print(f'call short was not selected')
+                    if cl_len == 0:
+                        print(f'call long was not selected')
+                    if ps_len == 0:
+                        print(f'put short was not selected')
+                    if pl_len == 0:
+                        print(f'put long was not selected')
+
+                else:
+                    call_spread = spread_data(call_short, call_long, spx_price_picker)
+                    put_spread = spread_data(put_short, put_long, spx_price_picker)
+
+                    print()
+                    persist_string(f'\n{file_path}:')
+
+                    display_spread("Call", call_spread)
+                    display_spread(" Put", put_spread)
+
+                    display_syms(call_short, call_long)
+                    display_syms(put_short, put_long)
+
+                    print()
+
+            else:
+                print(f'waiting for enough rows ({ROW_NEEDED}), current:{total_rows}')
+                print(f'and/or fewer than {MAX_NAN} None/Nan in bid/ask, current {rows_with_nan_bid_ask}')
 
 
 def is_market_open():
@@ -741,7 +1029,6 @@ def is_market_open():
 
 # Main function to set up MQTT client and start the processing thread
 def main():
-    global mqtt_client
 
 
     throttle_wait_display = 0
@@ -760,7 +1047,7 @@ def main():
             current_time = datetime.now(eastern)
             eastern_time_str = current_time.strftime('%H:%M:%S')
 
-            print(f'grid: Waiting for market to open, current East time: {eastern_time_str}')
+            print(f'waiting for market to open, current East time: {eastern_time_str}')
 
             pass
 
@@ -772,7 +1059,6 @@ def main():
 
     # Initialize MQTT client
     mqtt_client = mqtt.Client()
-    # mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 
     # Assign callback functions
     mqtt_client.on_connect = on_connect

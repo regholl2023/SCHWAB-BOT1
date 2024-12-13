@@ -10,7 +10,8 @@ from datetime import datetime, timezone, timedelta
 import warnings
 import json
 import pytz
-import spread_picker_B
+# import spread_picker_B
+import recommender
 from tabulate import tabulate
 import calendar
 import pytz
@@ -65,7 +66,7 @@ GRID_SUB_RESPONSE_TOPIC = "schwab/spx/grid/response/#"
 def on_connect(client, userdata, flags, rc):
 
     if rc == 0:
-        print("current_grid_tester: Connected to MQTT broker successfully.")
+        print("current_grid_tester: Connected to MQTT broker.")
         client.subscribe(GRID_SUB_RESPONSE_TOPIC)
         print(f"current_grid_tester: Subscribed to topic: {GRID_SUB_RESPONSE_TOPIC}")
 
@@ -78,7 +79,7 @@ def on_message(client, userdata, msg):
     topic = msg.topic
     payload = msg.payload.decode()
 
-    print(f"grid tester: Received topic type:{type(topic)}, payload type:{type(payload)}")
+    # print(f"grid tester: Received topic type:{type(topic)}, payload type:{type(payload)}")
 
 
     # payload may be empty or may not be json data
@@ -87,11 +88,11 @@ def on_message(client, userdata, msg):
         payload_dict = json.loads(payload)
 
     except json.JSONDecodeError:
-        print("cgt Payload is not valid JSON")
+        print("meic Payload is not valid JSON")
         return
 
     except Exception as e:
-        print(f"cgt An error occurred: {e} while trying load json data")
+        print(f"meic An error occurred: {e} while trying load json data")
         return
         
 
@@ -99,6 +100,99 @@ def on_message(client, userdata, msg):
 
     # Put the topic and payload into the queue as a tuple
     message_queue.put((topic, payload))
+
+
+
+
+
+def persist_string(string_data):
+    # Define the directory and ensure it exists
+    directory = r"C:\MEIC\tranche"
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    
+    # Generate the filename with current date and time in yymmddhhmmss format
+    current_datetime = datetime.now().strftime("%y%m%d")
+    filename = f"tranches_{current_datetime}.txt"
+    file_path = os.path.join(directory, filename)
+
+    # Ensure the directory exists
+    os.makedirs(directory, exist_ok=True)
+    
+    # Open the file in append mode, creating it if it doesn't exist, and append the string data
+    with open(file_path, 'a') as file:
+        file.write(string_data + '\n')
+
+
+
+def persist_list(list_data):
+
+    # print(f'in persist_list, list_data:\n{list_data}')
+
+    # Define the directory and ensure it exists
+    directory = r"C:\MEIC\tranche"
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    
+    # Generate the filename with current date and time in yymmddhhmmss format
+    current_datetime = datetime.now().strftime("%y%m%d")
+    filename = f"tranches_{current_datetime}.txt"
+    file_path = os.path.join(directory, filename)
+
+    try:
+    
+        with open(file_path, "a") as file:
+            # json.dump(list_data, file, indent=4)  # Indent for human-readable formatting
+
+            for item in list_data:
+                # Check if the required keys are present
+
+                if 'symbol' in item and 'bid' in item and 'ask' in item:
+
+                    bid_fl = float(item['bid'])
+                    bid_str = f"{bid_fl:.2f}"
+                    ask_fl = float(item['ask'])
+                    ask_str = f"{ask_fl:.2f}"
+                    last_fl = None
+                    last_str = "None"
+
+                    # if bid is 0 we are not interested in preserving the data
+                    if bid_fl == 0.0 or bid_fl >= 10:
+                        continue
+                    
+
+                    # Format the string
+                    formatted_string = f"symbol:{item['symbol']}, bid:{bid_str}, ask:{ask_str}"
+                    if 'last' in item:
+                        last_fl = float(item['last'])
+                        last_str = f"{last_fl:.2f}"
+                        formatted_string += f", last:{last_str}"
+
+                    if "SPXW24" in formatted_string:
+
+
+                        # FIX ME
+
+                        # Strip characters 8th through 17th, 19th, and 24th through 26th
+                        revised_string = (
+                            formatted_string[:7] +  # Keep everything up to the 7th character
+                            formatted_string[17:18] +  # Keep the 18th character
+                            formatted_string[19:23] +  # Keep characters 20th through 23rd
+                            formatted_string[26:]  # Keep everything from the 27th character onwards
+                        )
+
+                        print("Original string:", formatted_string)
+                        print("Revised string:", revised_string)
+                        formatted_string = revised_string
+
+
+
+                    file.write(formatted_string + '\n')
+
+    except Exception as e:
+        print(f"Error persist_list(): {e}")
+
+
 
 
 
@@ -155,13 +249,44 @@ def spread_data(short_opt, long_opt, spx_price):
 
 
 
+def get_syms(short_opt, long_opt):
+
+    # print(f'in display_syms, short_opt type{type(short_opt)}, data:\n{short_opt}')
+    # print(f'in display_syms, long_opt type{type(long_opt)}, data:\n{long_opt}')
+
+    short_sym = ""
+    long_sym = ""
+
+    
+    # Format the output according to the provided structure
+    try:
+
+
+        # Save symbols into string variables
+        short_sym = short_opt[0]['symbol']
+        long_sym = long_opt[0]['symbol']
+
+
+ 
+    except KeyError as e:
+        print(f"Missing key: {e}. Ensure all required keys are present in the short and long option lists.")
+        return "", ""
+    except Exception as e:
+        print(f"1325 An error occurred: {e} while trying to get symbols for short/long options")
+        return "", ""
+    
+
+    return short_sym, long_sym
+
+
+
 def display_spread(label_str, spread_list):
 
 
     # print(f'spread_list type:{type(spread_list)}, data:{spread_list}')
 
     if 'net' not in spread_list:
-        disp_str = f'No net. No recommendation.'
+        disp_str = f'{label_str}:  No recommendation.'
         print(disp_str)
         # persist_string(disp_str)
         return
@@ -196,7 +321,7 @@ def display_spread(label_str, spread_list):
     
     disp_str = f'{label_str} {output}'
     print(disp_str)
-    # persist_string(disp_str)
+    persist_string(disp_str)
          
 
 
@@ -219,15 +344,23 @@ def process_message():
         if "schwab/spx/grid/response" in topic:
             
             request_id = topic.split('/')[-1]
-            print(f'prev_request_id:<{prev_request_id}>, received request_id:<{request_id}>')
+
+            if "meic" in request_id:
+                if request_id != prev_request_id:
+                    print(f'Request ID mismatch!!! prev_request_id:<{prev_request_id}>, received request_id:<{request_id}>')
+                    time.sleep(0.01)
+                    continue
 
             end_time = datetime.now()
+            current_time = end_time.strftime('%H:%M:%S')
             elapsed_time = end_time - gbl_round_trip_start
             # Extract the total milliseconds from the elapsed time
             elapsed_milliseconds = int(elapsed_time.total_seconds() * 1000)
 
             # Print the elapsed time in milliseconds
-            print(f"Elapsed time: {elapsed_milliseconds} mS")
+            display_str = f'\nNew tranche attempt at {current_time} Pacific Time.  Elapsed grid request/response time: {elapsed_milliseconds} mS'
+            print(display_str)
+            persist_string(display_str)
 
             # print(f'grid responose topic:<{topic}>, payload_dict type{type(payload_dict)}, data:\n{payload_dict}')
             
@@ -235,13 +368,36 @@ def process_message():
                 call_long,
                 put_short,
                 put_long,
-                spx_price) = spread_picker_B.generate_recommendation(payload_dict)
+                spx_price) = recommender.generate_recommendation(payload_dict)
             
             call_spread = spread_data(call_short, call_long, spx_price)
             put_spread = spread_data(put_short, put_long, spx_price)
 
             display_spread("Call", call_spread)
             display_spread(" Put", put_spread)
+
+
+            if 'net' in call_spread or 'net' in put_spread:
+                display_str = "Symbols:"
+                persist_string(display_str)
+                print(display_str)
+
+
+            if 'net' in call_spread:
+                call_short_sym, call_long_sym = get_syms(call_short, call_long)
+                call_syms = f'{call_short_sym}/{call_long_sym}'
+                call_syms_display = "Call " + call_syms
+                persist_string(call_syms_display)
+                print(call_syms_display)
+
+            if 'net' in put_spread:
+                put_short_sym, put_long_sym = get_syms(put_short, put_long)
+                put_syms = f'{put_short_sym}/{put_long_sym}'
+                put_syms_display = " Put " + put_syms
+                persist_string(put_syms_display)
+                print(put_syms_display)
+
+
 
             
             
@@ -270,12 +426,12 @@ def publish_grid_request():
     current_time = datetime.now()
 
     # Format the time as hhmmssmmmm, where "mmmm" is milliseconds
-    req_id = "cgt" + current_time.strftime('%H%M%S') + f"{current_time.microsecond // 1000:04d}"
+    req_id = "meic" + current_time.strftime('%H%M%S') + f"{current_time.microsecond // 1000:04d}"
 
 
     topic = topic + req_id
 
-    print(f'publishing topic:<{topic}>')
+    # print(f'publishing topic:<{topic}>')
 
     mqtt_client.publish(topic, " ")
 
@@ -302,7 +458,7 @@ def meic_entry(schwab_client):
 
         # periodically Print the sorted DataFrame with the selected columns
         if display_quote_throttle % 20 == 15:
-            print(f'in meic_entry, caling publish_grid_request()')
+            # print(f'in meic_entry, caling publish_grid_request()')
             publish_grid_request()
             pass
 
