@@ -899,7 +899,7 @@ def meic_entry(schwab_client):
                 with open(file_path, "w") as file:
                     json.dump(quote_json, file, indent=4)  # Indent for human-readable formatting
 
-                print(f'saved chain data to {file_path}')
+                print(f'chain: saved grid/chain data to {file_path}')
 
                 # print(f'quote_json type:{type(quote_json)}, data:\n{quote_json}')
                 persist_string(f'\n{file_path}:')
