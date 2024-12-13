@@ -1050,7 +1050,9 @@ def get_current_spx(client, milliseconds_since_epoch):
                 ).json()
             
         except Exception as e:
-            print(f"112SEF spx_history = client.price_history: An error occurred: {e}")
+            current_time = datetime.now()
+            time_str = current_time.strftime('%H:%M:%S')
+            print(f"112SEF spx_history = client.price_history: An error occurred: {e} at {time_str}")
 
 
             if spx_history == None:
@@ -1064,7 +1066,9 @@ def get_current_spx(client, milliseconds_since_epoch):
                     return None, None, None, None
                 
                 time.sleep(0.25)
-                print(f"113SEF retrying") 
+                current_time = datetime.now()
+                time_str = current_time.strftime('%H:%M:%S')
+                print(f"113SEF retrying at {time_str}") 
 
                 continue
 

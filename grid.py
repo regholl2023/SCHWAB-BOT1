@@ -90,8 +90,8 @@ GRID_RESPONSE_TOPIC = "schwab/spx/grid/response/"
 def on_connect(client, userdata, flags, rc):
 
     if rc == 0:
+        print("Connected to MQTT broker successfully.")
         if mqtt_mode == MQTT_MODE_TOPICS:
-            print("Connected to MQTT broker successfully.")
             client.subscribe(SPX_LAST_TOPIC)
             print(f"Subscribed to topic: {SPX_LAST_TOPIC}")
             client.subscribe(SPX_OPT_BID_ASK_LAST_TOPIC)
