@@ -37,9 +37,12 @@ ___schwab/stream___ <br>
 with the quote data as payload
 
 # Individual apps
-- streamer.py: subscribe to streaming SPX and selected SPX option quotes via schwab api.  Publish via mqtt on local host. Periodically query the same SPX option prices to ensure that we have current and accurate prices.
-- grid.py: subscribe to mqtt localhost for SPX and SPX option data.  Maintain an SPX option grid. Publish the grid upon request
+- streamer.py: Subscribes to streaming SPX and selected SPX option quotes through the schwab api.  Publishes real time via mqtt on localhost. Periodically queries the same SPX option prices to ensure that we have current and accurate prices.
+- grid.py: Subscribes to mqtt (localhost) for SPX and SPX option data that is published by the streamdr.  Maintains current SPX and SPX option grid/chain. Publishs the grid on localhost mqtt upon request
+- chain.py: Subscribes to mqtt (localhost) for SPX and SPX option data that is published by the streamdr.  Maintains current SPX and SPX option grid/chain.  Once a minute, persists the current SPX and SPX option price data to a .json file for future evaluation.
+- gamma_track.py: Subscribes to all streamed SPX option data.  For each reported gamma value 0.05 or higher, persists the reported gamma data in a .pkl file for later evaluation.
 
-# Other files
-- recommender.py: given an SPX option grid, recommend call and put vertical spreads.
+# Other files the provide data or functions to be used by the aps
+- recommender.py: Based on a snapshot of the current SPX option grid/chain data, recommends Call and Put vertical spreads to be used in MEIC or METF trades.
+- picker_config.py: Provides parameters to be used the the recommender.
 - VERSION: schwab-streamer version
