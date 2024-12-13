@@ -885,19 +885,11 @@ def ten_max(option_list, spx_price, option_type, atm_straddle_value):
         if my_short_target < min_short:
             my_short_target = min_short
 
-        min_spread_width = 15
-        if my_short_target < 1.2:
-            min_spread_width = 10
-        if my_short_target < 1:
-            min_spread_width = 5
-
-
 
         # print(f'ten_max() atm_straddle_value type{type(atm_straddle_value)}, value:{atm_straddle_value}')
         # print(f'ten_max() max_short type{type(max_short)}, value:{max_short}')
         # print(f'ten_max() min_short type{type(min_short)}, value:{min_short}')
         print(f'ten_max() my_short_target type: {type(my_short_target)}, value: {my_short_target:.2f}')
-        print(f'ten_max() min_spread_width: {min_spread_width}')
 
     
         # Filter the out-of-the-money (OTM) options based on the type (CALL or PUT)
@@ -940,9 +932,8 @@ def ten_max(option_list, spx_price, option_type, atm_straddle_value):
             if opt.get('STRIKE') and 
             (opt['STRIKE'] > short_leg['STRIKE'] if option_type == "CALL" else opt['STRIKE'] < short_leg['STRIKE']) and 
             # 20 <= abs(opt['STRIKE'] - short_leg['STRIKE']) <= 50
-            # 15 <= abs(opt['STRIKE'] - short_leg['STRIKE']) <= 50
-            # 10 <= abs(opt['STRIKE'] - short_leg['STRIKE']) <= 50
-            min_spread_width <= abs(opt['STRIKE'] - short_leg['STRIKE']) <= 50
+            15 <= abs(opt['STRIKE'] - short_leg['STRIKE']) <= 50
+
         ]
         
         # print(f'fifty_max_list len:{len(fifty_max_list)}, data:')

@@ -4,8 +4,12 @@
 *.env
 *.log
 
-# Ignore all CSV files recursively
+# CSV files recursively
 **/*.csv
+
+# test programs
+test*.py
+
 
 __pycache__/
 
