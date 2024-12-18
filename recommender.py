@@ -70,8 +70,8 @@ min_long_val = picker_config.MIN_LONG_VAL       # min ask value for long leg
 min_spx_distance = picker_config.MIN_SPX_DISTANCE   # minimum difference bewteen strike price of the long leg 
                                                     # and current price of SPX
 
-max_short = picker_config.MAX_SHORT
-min_short = picker_config.MIN_SHORT
+max_short_target = picker_config.MAX_SHORT_TARGET
+min_short_target = picker_config.MIN_SHORT_TARGET
 
 # print(f'grid_directory type:{type(grid_directory)}, value: <{grid_directory}>')
 # print(f'max_width type:{type(max_width)}, value: {max_width}')
@@ -871,32 +871,59 @@ def display_lists(opt_short, opt_long):
 
 
 def ten_max(option_list, spx_price, option_type, atm_straddle_value):
+
+    DEBUG_TEN_MAX = False
         
     try:
 
         # print(f'in ten_max(), option_type:{option_type}, spx:{spx_price}')
         # print(f'in ten_max(), option_list type:{type(option_list)}, data:\n{option_list}')
 
-        my_short_target = atm_straddle_value * 0.17
 
-        if my_short_target > max_short:
-            my_short_target = max_short
+        # base_short_target = 1.8
+        base_short_target = max_short_target
+        my_short_target = base_short_target
+        atm_short_target = atm_straddle_value * 0.22
 
-        if my_short_target < min_short:
-            my_short_target = min_short
+        if DEBUG_TEN_MAX == True:
+            print(f'base_short_target:{base_short_target} atm_short_target:{atm_short_target}, min_short_target:{min_short_target}')
+
+        if atm_short_target < my_short_target:
+            if DEBUG_TEN_MAX == True:
+                print(f'atm target is less than my short (base) target, my_target is now atm target')
+            
+            my_short_target = atm_short_target
+
+        else:
+            pass
+            # print(f'atm target is not less than my short (base) target')
+
+
+        if my_short_target < min_short_target:
+            # print(f'my_short_target is less than min_short_target:{min_short_target}, my_short_target is now min_short_target')
+            my_short_target = min_short_target
+        else:
+            # print(f'my_short_target is not less than min_short_target:{min_short_target}, keeping my_short')
+            pass
+
+
+
+
+        # print(f'base_short_target:{base_short_target:.2f}, atm_short_target:{atm_short_target:.2f}, my_short_target:{my_short_target:.2f}')
+
 
 
         # print(f'ten_max() atm_straddle_value type{type(atm_straddle_value)}, value:{atm_straddle_value}')
-        # print(f'ten_max() max_short type{type(max_short)}, value:{max_short}')
-        # print(f'ten_max() min_short type{type(min_short)}, value:{min_short}')
-        print(f'ten_max() my_short_target type: {type(my_short_target)}, value: {my_short_target:.2f}')
+        # print(f'ten_max() max_short_target type{type(max_short_target)}, value:{max_short_target}')
+        # print(f'ten_max() min_short_target type{type(min_short_target)}, value:{min_short_target}')
+        # print(f'ten_max() my_short_target type: {type(my_short_target)}, value: {my_short_target:.2f}')
 
     
         # Filter the out-of-the-money (OTM) options based on the type (CALL or PUT)
         if option_type == "CALL":
-            otm_list = [opt for opt in option_list if opt.get('STRIKE') and opt['STRIKE'] > spx_price]
+            otm_list = [opt for opt in option_list if opt.get('STRIKE') and opt['STRIKE'] > (spx_price + 2)]
         elif option_type == "PUT":
-            otm_list = [opt for opt in option_list if opt.get('STRIKE') and opt['STRIKE'] < spx_price]
+            otm_list = [opt for opt in option_list if opt.get('STRIKE') and opt['STRIKE'] < (spx_price - 2)]
         else:
             print("Invalid option_type:<{option_type}>. Must be 'CALL' or 'PUT'.")
             return [], []
@@ -909,6 +936,13 @@ def ten_max(option_list, spx_price, option_type, atm_straddle_value):
         if not otm_list:
             print("No OTM options found.")
             return [], []
+        
+
+        if DEBUG_TEN_MAX == True:
+            print(f'my_short_target used:{my_short_target}')
+        
+
+        
 
 
         # # Select the short_leg based on the bid closest to 2.00
@@ -991,6 +1025,8 @@ def ten_max(option_list, spx_price, option_type, atm_straddle_value):
 
 def calculate_atm_straddle_value(chain):
 
+    DEBUG_ATM_VALUE = False
+
     try:
 
         # Extract the SPX last price
@@ -1033,12 +1069,15 @@ def calculate_atm_straddle_value(chain):
         # Calculate the value of the ATM straddle
         straddle_value = closest_call['bid'] + closest_put['bid']
 
-        # Display the results
-        print(f"Call Option Symbol: {closest_call['symbol']}")
-        print(f"Put Option Symbol: {closest_put['symbol']}")
-        print(f"Call Bid Value: {closest_call['bid']}")
-        print(f"Put Bid Value: {closest_put['bid']}")
-        print(f"ATM Straddle Value: {straddle_value}")
+
+        if DEBUG_ATM_VALUE == True:
+
+            # Display the results
+            print(f"Call Option Symbol: {closest_call['symbol']}")
+            print(f"Put Option Symbol: {closest_put['symbol']}")
+            print(f"Call Bid Value: {closest_call['bid']}")
+            print(f"Put Bid Value: {closest_put['bid']}")
+            print(f"ATM Straddle Value: {straddle_value:.2f}")
 
         return straddle_value
 
@@ -1065,7 +1104,7 @@ def generate_recommendation(grid):
     spx_last_fl = None
 
     
-    print(f'grid type:{type(grid)}, data:\n{grid}')
+    # print(f'grid type:{type(grid)}, data:\n{grid}')
 
     atm_straddle_value = calculate_atm_straddle_value(grid)
     if atm_straddle_value == None:

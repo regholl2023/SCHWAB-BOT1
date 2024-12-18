@@ -20,6 +20,8 @@ quote_df_lock = threading.Lock()
 
 
 
+
+
 def load_env_variables():
     
     # parent_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
@@ -39,7 +41,7 @@ def load_env_variables():
 
 
 
-
+section_divider_str = "======================================"
 
 spx_last_fl = None
 spx_bid_fl = None
@@ -524,17 +526,21 @@ def persist_list(list_data):
                     last_fl = None
                     last_str = "None"
 
-                    # if bid is 0 we are not interested in preserving the data
-                    if bid_fl == 0.0 or bid_fl >= 10:
-                        continue
+                    # if the item is an option and the bid is 0 or too high
+                    # we can skip it
+                    if 'SPXW' in item['symbol']:
+                        if bid_fl == 0.0 or bid_fl >= 10:
+                            continue
                     
 
                     # Format the string
-                    formatted_string = f"symbol:{item['symbol']}, bid:{bid_str}, ask:{ask_str}"
+                    
+                    last_str = "None"
                     if 'last' in item:
                         last_fl = float(item['last'])
                         last_str = f"{last_fl:.2f}"
-                        formatted_string += f", last:{last_str}"
+
+                    formatted_string = f"symbol:{item['symbol']}, bid:{bid_str}, ask:{ask_str},    last:{last_str}"
 
                     if "SPXW24" in formatted_string:
 
@@ -783,6 +789,52 @@ def display_syms(short_opt, long_opt):
 
 
          
+def segregrate_opt_grid(opt_grid):
+    try:
+        spx_list = []
+        call_list = []
+        put_list = []
+
+        # Create spx_list and save spx_last from the first item
+        for item in opt_grid:
+            symbol = item.get('symbol', '')
+            if symbol == '$SPX':
+                spx_list.append(item)
+
+        if not spx_list:
+            raise ValueError("No SPX items found in opt_grid")
+
+        spx_last = spx_list[0]['last']
+        # print(f"SPX Last Value: {spx_last}")
+
+        # Create call_list with conditions
+        for item in opt_grid:
+            symbol = item.get('symbol', '')
+            if 'SPXW' in symbol and 'C0' in symbol:
+                strike_price = int(symbol.split('C0')[1][:4])
+                if strike_price >= spx_last:
+                    call_list.append(item)
+
+        # Create put_list with conditions
+        for item in opt_grid:
+            symbol = item.get('symbol', '')
+            if 'SPXW' in symbol and 'P0' in symbol:
+                strike_price = int(symbol.split('P0')[1][:4])
+                if strike_price <= spx_last:
+                    put_list.append(item)
+
+        # Display the lists
+        # print("\nSPX List:", spx_list)
+        # print("\nCall Options List:", call_list)
+        # print("\nPut Options List:", put_list)
+
+        return spx_list, call_list, put_list
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return [], [], []
+
+         
      
 
 def meic_entry(schwab_client):
@@ -885,6 +937,7 @@ def meic_entry(schwab_client):
                 # print(f'pretty_json:\n{pretty_json}')
                 # current_datetime = datetime.now().strftime("%y%mdd%H%M%S")
                 current_datetime = datetime.now().strftime("%y%m%d%H%M%S")
+                current_hhmmss = datetime.now().strftime("%H:%M:%S")
                 # print(f'current_datetime:{current_datetime}')
                 directory = r"C:\MEIC\chain_data"
                 filename = f"quote_{current_datetime}.json"
@@ -899,11 +952,33 @@ def meic_entry(schwab_client):
                 with open(file_path, "w") as file:
                     json.dump(quote_json, file, indent=4)  # Indent for human-readable formatting
 
+
+
+                persist_string("")
+                persist_string(section_divider_str)
+                
+
                 print(f'chain: saved grid/chain data to {file_path}')
 
                 # print(f'quote_json type:{type(quote_json)}, data:\n{quote_json}')
-                persist_string(f'\n{file_path}:')
-                persist_list(quote_json)
+                persist_string(f'\nChain data file: {file_path}:')
+                persist_string("")
+
+                spx_list, call_list, put_list= segregrate_opt_grid(quote_json)
+
+                # persist_list(quote_json)
+
+                persist_string("Puts:")
+                persist_list(put_list)
+                persist_string("")
+                persist_string("SPX:")
+                persist_list(spx_list)
+                persist_string("")
+                persist_string("Calls:")
+                persist_list(call_list)
+                persist_string("")
+
+
 
                 # Save the JSON data to the file with indentation for readability
                 with open(file_path, "w") as file:
@@ -960,8 +1035,9 @@ def meic_entry(schwab_client):
                     call_spread = spread_data(call_short, call_long, spx_price_picker)
                     put_spread = spread_data(put_short, put_long, spx_price_picker)
 
-                    print()
-                    persist_string(f'\n{file_path}:')
+                    # print()
+                    # persist_string(f'\n{file_path}:')
+                    persist_string(f'Spread recommendations at {current_hhmmss}')
 
                     display_spread("Call", call_spread)
                     display_spread(" Put", put_spread)
@@ -1047,7 +1123,7 @@ def main():
             current_time = datetime.now(eastern)
             eastern_time_str = current_time.strftime('%H:%M:%S')
 
-            print(f'waiting for market to open, current East time: {eastern_time_str}')
+            print(f'chain: waiting for market to open, current East time: {eastern_time_str}')
 
             pass
 
