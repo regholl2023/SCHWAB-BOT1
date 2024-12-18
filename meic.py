@@ -358,7 +358,7 @@ def process_message():
             elapsed_milliseconds = int(elapsed_time.total_seconds() * 1000)
 
             # Print the elapsed time in milliseconds
-            display_str = f'\nNew tranche attempt at {current_time} Pacific Time.  Elapsed grid request/response time: {elapsed_milliseconds} mS'
+            display_str = f'\nmeic: New tranche attempt at {current_time} Pacific Time.  Elapsed grid request/response time: {elapsed_milliseconds} mS'
             print(display_str)
             persist_string(display_str)
 
