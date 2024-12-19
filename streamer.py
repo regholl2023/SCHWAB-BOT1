@@ -968,7 +968,7 @@ def wait_for_market_to_open():
     ITERATIONS_BETWEEN_DISPLAY = int(60 / SECONDS_BETWEEN_CHECKS)
 
 
-    # loop until market is open
+    # loop until market is open 
     market_wait_cnt = 0
     throttle_time_display = ITERATIONS_BETWEEN_DISPLAY
     while True:
@@ -982,7 +982,7 @@ def wait_for_market_to_open():
         
         throttle_time_display += 1
         if throttle_time_display >= ITERATIONS_BETWEEN_DISPLAY:
-            print(f'Market is not open. Current: {get_eastern_weekday_time()}')
+            print(f'streamer: Market is not open. Current: {get_eastern_weekday_time()}')
             throttle_time_display = 0
         
         
@@ -1050,7 +1050,9 @@ def get_current_spx(client, milliseconds_since_epoch):
                 ).json()
             
         except Exception as e:
-            print(f"112SEF spx_history = client.price_history: An error occurred: {e}")
+            current_time = datetime.now()
+            time_str = current_time.strftime('%H:%M:%S')
+            print(f"112SEF spx_history = client.price_history: An error occurred: {e} at {time_str}")
 
 
             if spx_history == None:
@@ -1064,7 +1066,9 @@ def get_current_spx(client, milliseconds_since_epoch):
                     return None, None, None, None
                 
                 time.sleep(0.25)
-                print(f"113SEF retrying") 
+                current_time = datetime.now()
+                time_str = current_time.strftime('%H:%M:%S')
+                print(f"113SEF retrying at {time_str}") 
 
                 continue
 
